@@ -161,8 +161,13 @@ async function reverseWithWebCodecs(src, onProgress = () => {}, { trimStill = fa
     return out;
   };
   // Strict: only frames practically identical to the final picture count as
-  // "still" (compression noise between identical frames stays well under this).
-  const differs = (a, b) => { let s = 0; for (let i = 0; i < a.length; i++) s += Math.abs(a[i] - b[i]); return s / a.length >= 0.4; };
+  // "still" — on average and in every block, so a change in a small area still
+  // counts (compression noise between identical frames stays well under both).
+  const differs = (a, b) => {
+    let s = 0, max = 0;
+    for (let i = 0; i < a.length; i++) { const d = Math.abs(a[i] - b[i]); s += d; if (d > max) max = d; }
+    return s / a.length >= 0.4 || max >= 6;
+  };
 
   // Work backwards in chunks so long videos never hold every frame in memory:
   // capture a chunk forwards (cheap sequential seeks), then encode it in reverse.

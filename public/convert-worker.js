@@ -97,8 +97,14 @@ function reverse(input, trimStill) {
   let last = n - 1;
   if (trimStill) {
     // Strict: only frames practically identical to the final picture count as
-    // still (compression noise between identical frames stays well under this).
-    const differs = (i, j) => { let s = 0; for (let k = 0; k < T; k++) s += Math.abs(thumbs[i * T + k] - thumbs[j * T + k]); return s / T >= 0.4; };
+    // still — on average, and in every block, so a change confined to a small
+    // area (a highlight moving in a menu) still counts as motion. Compression
+    // noise between identical frames stays well under both limits.
+    const differs = (i, j) => {
+      let s = 0, max = 0;
+      for (let k = 0; k < T; k++) { const d = Math.abs(thumbs[i * T + k] - thumbs[j * T + k]); s += d; if (d > max) max = d; }
+      return s / T >= 0.4 || max >= 6;
+    };
     while (last > 0 && !differs(last - 1, n - 1)) last--;
   }
 
