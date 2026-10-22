@@ -439,7 +439,7 @@ export function mountTimeline(ctx) {
     if (back.enabled && proj.video) {
       if (job?.error) revStatus = h('p', { class: 'warn' }, `Couldn't make the reversed video: ${job.error} `, h('button', { class: 'link-btn', onclick: () => ctx.ensureReversed(proj.video.file) }, 'Retry'));
       else if (job) revStatus = h('div', { class: 'rev-progress' }, `Making reversed video… ${Math.round(job.pct * 100)}%`, h('div', { class: 'bar' }, h('div', { style: `width:${job.pct * 100}%` })));
-      else if (revReady) revStatus = h('p', { class: 'hint ok' }, '✓ Reversed video ready · ', ctx.reversedDownload(revReady.file, proj.video.name || proj.name));
+      else if (revReady) revStatus = ctx.reversedReady(proj.video.file, proj.video.name || proj.name);
     }
 
     sections.push(h('div', { class: 'section' },

@@ -1,6 +1,7 @@
-// "Fix video": re-encodes a clip as plain H.264 (video only) in the browser,
-// using ffmpeg in a worker (convert-worker.js). One worker is kept so ffmpeg
-// (about 32 MB, cached by the browser) loads once per page; jobs run in turn.
+// In-browser ffmpeg jobs (convert-worker.js): "Fix video" re-encodes a clip as
+// plain H.264, and reversed copies for rewinds are made frame-exact. One
+// worker is kept so ffmpeg (about 32 MB, cached by the browser) loads once
+// per page; jobs run in turn.
 
 let worker = null;
 let queue = Promise.resolve();
@@ -10,14 +11,29 @@ function getWorker() {
   return worker;
 }
 
-// onProgress(phase, pct): phase 'download' | 'load' | 'convert', pct 0..1.
-export function fixVideo(src, onProgress = () => {}) {
-  const job = queue.then(() => run(src, onProgress));
-  queue = job.catch(() => {});
-  return job;
+function enqueue(job) {
+  const next = queue.then(job);
+  queue = next.catch(() => {});
+  return next;
 }
 
-async function run(src, onProgress) {
+// onProgress(phase, pct): phase 'download' | 'load' | 'convert', pct 0..1.
+export function fixVideo(src, onProgress = () => {}) {
+  return enqueue(async () => {
+    const { buf } = await run(src, { op: 'fix' }, onProgress);
+    return new Blob([buf], { type: 'video/mp4' });
+  });
+}
+
+// Resolves to { blob, fps, frames, sourceFrames, settle } (see reverse() in the worker).
+export function reverseWithFfmpeg(src, onProgress = () => {}, { trimStill = false } = {}) {
+  return enqueue(async () => {
+    const { buf, type, ...meta } = await run(src, { op: 'reverse', trimStill }, onProgress);
+    return { blob: new Blob([buf], { type: 'video/mp4' }), ...meta };
+  });
+}
+
+async function run(src, msg, onProgress) {
   onProgress('download', 0);
   const res = await fetch(src);
   if (!res.ok) throw new Error(`Couldn't download the video (${res.status})`);
@@ -30,7 +46,7 @@ async function run(src, onProgress) {
     w.onmessage = ({ data }) => {
       if (data.type === 'phase') { phase = data.phase; onProgress(phase, 0); }
       else if (data.type === 'progress') onProgress(phase, data.pct);
-      else if (data.type === 'done') resolve(new Blob([data.buf], { type: 'video/mp4' }));
+      else if (data.type === 'done') resolve(data);
       else if (data.type === 'error') reject(new Error(data.message));
     };
     w.onerror = e => {
@@ -38,6 +54,6 @@ async function run(src, onProgress) {
       worker = null; // a broken worker is replaced on the next job
       reject(new Error(e.message || "Couldn't start the converter (needs internet the first time)"));
     };
-    w.postMessage({ buf, ext }, [buf]);
+    w.postMessage({ ...msg, buf, ext }, [buf]);
   });
 }

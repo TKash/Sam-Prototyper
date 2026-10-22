@@ -1,6 +1,10 @@
 // Builds a reversed copy of an MP4 in the browser. Browsers can't play video
 // backwards smoothly, so the player plays this pre-reversed file forwards instead.
 //
+// Normally ffmpeg does it (convert.js): it addresses frames by number, so the
+// copy is frame-exact at any frame rate, and encodes at constant quality. The
+// WebCodecs method below is the fallback when ffmpeg can't load (offline):
+//
 // 1. Step through the source frame by frame (seek) and copy each decoded frame
 //    out in its native YUV form — no RGB canvas or JPEG step, so colours and
 //    brightness come through exactly (falls back to a canvas copy only if the
@@ -8,6 +12,8 @@
 // 2. Feed those frames in reverse order to a WebCodecs H.264 encoder, tagged
 //    with the source's colour space.
 // 3. Mux the result into an MP4 with mp4-muxer.
+
+import { reverseWithFfmpeg } from './convert.js';
 
 const MUXER_URL = 'https://cdn.jsdelivr.net/npm/mp4-muxer@5.1.3/+esm';
 const CODECS = ['avc1.640028', 'avc1.4d0028', 'avc1.420028'];
@@ -47,7 +53,23 @@ export async function detectFps(v) {
 
 // options.trimStill: leave out the source's final still picture (canvas rewinds).
 // Single-video prototypes need the full-length copy, so they don't pass it.
-export async function reverseVideo(src, onProgress = () => {}, { trimStill = false } = {}) {
+// Resolves to { blob, fps, frames, sourceFrames, settle, engine }.
+export async function reverseVideo(src, onProgress = () => {}, opts = {}) {
+  try {
+    // ffmpeg's own progress, after fetching the video and loading ffmpeg itself.
+    const r = await reverseWithFfmpeg(src, (phase, pct) => onProgress(phase === 'convert' ? 0.05 + 0.95 * pct : 0.02), opts);
+    return { ...r, engine: 'ffmpeg' };
+  } catch (e) {
+    console.warn('Reversing with ffmpeg failed, trying WebCodecs:', e);
+    try {
+      return { ...(await reverseWithWebCodecs(src, onProgress, opts)), engine: 'webcodecs' };
+    } catch {
+      throw e; // ffmpeg's reason is the more useful one
+    }
+  }
+}
+
+async function reverseWithWebCodecs(src, onProgress = () => {}, { trimStill = false } = {}) {
   if (typeof VideoEncoder === 'undefined') throw new Error('This browser can\'t encode video (WebCodecs missing). Use Chrome or Edge.');
   const { Muxer, ArrayBufferTarget } = await import(MUXER_URL);
 

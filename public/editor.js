@@ -1388,7 +1388,7 @@ function reverseSection(from, t) {
     status = h('div', { class: 'rev-progress' }, `Making reversed video… ${Math.round(job.pct * 100)}%`,
       h('div', { class: 'bar' }, h('div', { style: `width:${job.pct * 100}%` })));
   } else if (r.file) {
-    status = h('p', { class: 'hint ok' }, '✓ Reversed video ready · ', reversedDownload(r.file, src?.name));
+    status = reversedReady(src.file, src.name);
   }
 
   return h('div', { class: 'pop-field rev' },
@@ -1412,10 +1412,18 @@ function reverseSection(from, t) {
   );
 }
 
-// A link that saves a reversed copy, named after its source video.
-function reversedDownload(file, name) {
+// "Ready" line for a source's reversed copy: download it (named after the
+// source) or make it again. Copies from the older method get a nudge to remake.
+function reversedReady(srcFile, name) {
+  const cached = state.project.reversed?.[srcFile];
+  if (!cached) return null;
   const base = (name || 'video').replace(/[\\/:*?"<>|]+/g, ' ').replace(/\.\w+$/, '').trim() || 'video';
-  return h('a', { class: 'link-btn', href: `/media/${file}`, download: `${base}-reversed.mp4` }, 'Download');
+  return h('div', {},
+    h('p', { class: 'hint ok' }, '✓ Reversed video ready · ',
+      h('a', { class: 'link-btn', href: `/media/${cached.file}`, download: `${base}-reversed.mp4` }, 'Download'), ' · ',
+      h('button', { class: 'link-btn', title: 'Make the reversed video again', onclick: () => ensureReversed(srcFile) }, 'Remake')),
+    cached.v >= 2 ? null : h('p', { class: 'hint' }, 'Made with the older method. Remake it for exact frames and better quality.'),
+  );
 }
 
 function toggleReverse(t, on) {
@@ -1474,12 +1482,13 @@ async function ensureReversed(file) {
   try {
     // Canvas rewinds skip the source's final still; single-video prototypes need the full copy.
     const trimStill = state.project.mode !== 'timeline';
-    const { blob, settle } = await reverseVideo(`/media/${file}`, pct => { job.pct = pct; renderReverseProgress(); }, { trimStill });
+    const { blob, settle, engine } = await reverseVideo(`/media/${file}`, pct => { job.pct = pct; renderReverseProgress(); }, { trimStill });
     const r = await fetch('/api/upload', { method: 'POST', headers: { 'x-filename': `reversed-${file.replace(/\.\w+$/, '')}.mp4` }, body: blob });
     const res = await r.json();
     if (!r.ok) throw new Error(res.error || 'upload failed');
     state.project.reversed ||= {};
-    state.project.reversed[file] = { file: res.file, size: res.size, ...(trimStill ? { settle } : {}) };
+    // v: 2 marks frame-exact copies made by ffmpeg (older ones are offered a remake).
+    state.project.reversed[file] = { file: res.file, size: res.size, ...(trimStill ? { settle } : {}), ...(engine === 'ffmpeg' ? { v: 2 } : {}) };
     state.revJobs.delete(file);
     reconcileReverse();
     save();
@@ -1786,7 +1795,7 @@ function offlineBytes(p) {
 function timelineContext() {
   return {
     app, state, h, api, toast, save, snapshot, keyLabel, confirmButton,
-    publishSection, localSection, copyLink, playerUrl, ensureReversed, reversedDownload,
+    publishSection, localSection, copyLink, playerUrl, ensureReversed, reversedReady,
     undoRedo: redo => (redo ? restore(state.redo, state.undo) : restore(state.undo, state.redo)),
   };
 }
