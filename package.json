@@ -1,0 +1,11 @@
+{
+  "name": "clip-proto",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "devDependencies": {
+    "wrangler": "^4.151.0"
+  }
+}

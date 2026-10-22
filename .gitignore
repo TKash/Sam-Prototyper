@@ -1,0 +1,17 @@
+# Dependencies
+node_modules/
+
+# Local app data: projects and uploaded videos (can be large / confidential)
+data/
+
+# Generated export folders and offline files
+exports/
+
+# Cloudflare Wrangler local state and secrets
+.wrangler/
+.dev.vars
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.log

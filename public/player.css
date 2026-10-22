@@ -1,0 +1,22 @@
+html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+body.idle { cursor: none; }
+#stage { position: fixed; inset: 0; opacity: 0; }
+#stage.ready { opacity: 1; }
+#stage video {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: contain; pointer-events: none;
+  background: #000; /* letterbox bars must not show clips stacked underneath */
+  z-index: 0;
+}
+#stage.cover video { object-fit: cover; }
+#stage video.active { z-index: 2; }
+#cover { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 3; visibility: hidden; pointer-events: none; }
+#cover.on { visibility: visible; }
+#progress { position: fixed; left: 0; right: 0; bottom: 0; height: 3px; background: rgba(255,255,255,.08); }
+#progress div { height: 100%; width: 0; background: rgba(255,255,255,.7); transition: width .1s linear; }
+#progress.done { opacity: 0; transition: opacity .3s; }
+#error {
+  position: fixed; inset: 0; display: grid; place-items: center; padding: 16px;
+  color: #ccc; font: 14px system-ui, sans-serif; text-align: center; white-space: pre-wrap;
+}
+[hidden] { display: none !important; }

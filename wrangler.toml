@@ -1,0 +1,17 @@
+# Hosted Clip Proto (Cloudflare Workers). Deploy: npx wrangler deploy
+# Editor password: npx wrangler secret put EDITOR_PASSWORD
+name = "clip-proto"
+main = "worker/index.js"
+compatibility_date = "2025-09-01"
+workers_dev = true
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+run_worker_first = true      # the worker routes /api, /media and /p first
+html_handling = "none"       # serve /player.html etc. at their exact paths
+not_found_handling = "none"
+
+[[kv_namespaces]]
+binding = "STORE"
+id = "525fba97cd8f4bb2824f06f23c5386ab"
