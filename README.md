@@ -26,6 +26,8 @@ Open http://localhost:5180 (set `PORT` to change it). Needs Node 18+. Nothing to
 
 ## Player
 
+Press **H** for help: a see-through panel over the running prototype with the prototype's help text (or, without one, a map of every screen and where its keys lead, or the list of stops), the keys and actions that work on the current screen, and the general controls (H, R, M, double-click). It follows along as you navigate; H or Esc closes it. Write the help text in the Prototype panel (or the single-video panel), and an optional **Screen note** per frame.
+
 `/p/<id>` downloads every video, prepares the first frame of each, then starts. Switching clips happens within a frame, with no flash or load. Double-click toggles full screen.
 
 Rewinds use a reversed copy of the video that the editor makes in your browser with ffmpeg (`public/reverse.js` and `convert-worker.js`). It reads every frame by number, at a constant frame rate, so 29.97 fps and variable-frame-rate exports come out frame-exact with the original timing, and it encodes at constant quality (x264, CRF 15). If ffmpeg can't load, it falls back to the older WebCodecs method. The copy is made once per video and saved with the project. The panel has **Download** and **Remake** links, and copies made with the older method are flagged for a remake. If you press back during an animation, the player waits until that clip has settled, then plays the full rewind.

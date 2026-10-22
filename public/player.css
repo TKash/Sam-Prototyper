@@ -20,3 +20,45 @@ body.idle { cursor: none; }
   color: #ccc; font: 14px system-ui, sans-serif; text-align: center; white-space: pre-wrap;
 }
 [hidden] { display: none !important; }
+
+/* Help (H): a see-through panel over the running prototype. */
+.help {
+  position: fixed; z-index: 20; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow: auto;
+  padding: 22px 24px 18px; border-radius: 18px;
+  /* See-through like an onion skin, but readable even over bright video
+     (and where the blur isn't available). */
+  background: rgba(14, 14, 18, .7);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .35);
+  backdrop-filter: blur(18px) saturate(1.3); -webkit-backdrop-filter: blur(18px) saturate(1.3);
+  border: 1px solid rgba(255, 255, 255, .14);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .35), inset 0 1px 0 rgba(255, 255, 255, .08);
+  color: #f2f2f3; font: 14px/1.5 Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased; animation: help-in .16s ease-out;
+  scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, .25) transparent;
+}
+@keyframes help-in { from { opacity: 0; transform: translate(-50%, calc(-50% + 6px)); } }
+@media (prefers-reduced-motion: reduce) { .help { animation: none; } }
+.help-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+.help h2 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -.01em; }
+.help-close { color: rgba(255, 255, 255, .55); font-size: 12px; white-space: nowrap; }
+.help section { padding-top: 14px; margin-top: 14px; border-top: 1px solid rgba(255, 255, 255, .1); }
+.help h3 { margin: 0 0 8px; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: rgba(255, 255, 255, .55); }
+.help p { margin: 0 0 8px; }
+.help p:last-child { margin-bottom: 0; }
+.help-muted { color: rgba(255, 255, 255, .6); }
+.help-note { padding: 8px 12px; border-radius: 10px; background: rgba(255, 255, 255, .08); }
+.help-rows { display: grid; grid-template-columns: max-content 1fr; gap: 8px 16px; margin: 0; align-items: center; }
+.help-rows dt { display: flex; gap: 4px; flex-wrap: wrap; color: rgba(255, 255, 255, .75); font-size: 13px; }
+.help-rows dd { margin: 0; }
+.help-map { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; }
+.help-map li { display: flex; flex-wrap: wrap; gap: 2px 10px; padding: 5px 10px; border-radius: 8px; color: rgba(255, 255, 255, .7); }
+.help-map li strong { color: #f2f2f3; font-weight: 500; }
+.help-map li span { font-size: 13px; }
+.help-map li.here { background: rgba(13, 153, 255, .22); box-shadow: inset 0 0 0 1px rgba(13, 153, 255, .55); }
+.help kbd {
+  display: inline-grid; place-items: center; min-width: 24px; height: 24px; padding: 0 7px;
+  border-radius: 6px; border: 1px solid rgba(255, 255, 255, .28); border-bottom-width: 2px;
+  background: rgba(255, 255, 255, .08); color: #fff; font: 600 12px/1 Inter, system-ui, sans-serif;
+}
+@media (max-width: 560px) { .help { padding: 18px 16px 14px; } .help-close { display: none; } }

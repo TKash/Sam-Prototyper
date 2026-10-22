@@ -477,6 +477,7 @@ export function mountTimeline(ctx) {
       h('label', { class: 'row' },
         h('input', { type: 'checkbox', checked: !!proj.sound, onchange: e => commit(() => { proj.sound = e.target.checked; }) }),
         'Play audio (starts after the first key press)'),
+      ctx.helpField(proj, 'help', 'Help text', 'Shown when viewers press H, with the keys that work at each stop. Leave empty to list the stops instead.', 'What this prototype shows and how to move through it…'),
     ));
 
     sections.push(ctx.publishSection(), ctx.localSection());

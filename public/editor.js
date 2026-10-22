@@ -1634,6 +1634,7 @@ function renderInspector() {
             h('option', { value: 'loop', selected: c.end.type === 'loop' }, 'Loop'),
             h('option', { value: 'hold', selected: c.end.type === 'hold' }, 'Hold last frame'),
           )),
+      helpField(c, 'note', 'Screen note', 'Shown in the help panel (H) while this frame is on screen.', 'e.g. Try the arrow keys to move between the titles'),
       fixSection(c),
       h('div', { class: 'row' },
         confirmButton({ cls: 'danger-outline', label: `${TRASH_ICON} Delete frame`, armedLabel: 'Click again to delete', title: `Delete ${c.name}`, onConfirm: () => deleteClip(c) }),
@@ -1654,6 +1655,7 @@ function renderInspector() {
       h('label', { class: 'row' },
         h('input', { type: 'checkbox', checked: !!p.sound, onchange: e => commit(() => { p.sound = e.target.checked; }) }),
         'Play audio (starts after the first key press)'),
+      helpField(p, 'help', 'Help text', 'Shown when viewers press H, with the keys that work on each screen. Leave empty to show a map of all the screens instead.', 'What this prototype shows and how to move around in it…'),
     ));
     sections.push(globalTriggersSection());
   }
@@ -1661,6 +1663,17 @@ function renderInspector() {
   sections.push(publishSection(), localSection());
 
   dom.inspector.replaceChildren(...sections);
+}
+
+// Free text shown in the player's help panel (H). Empty removes the field.
+function helpField(obj, key, label, hint, placeholder) {
+  return h('label', { class: 'field' }, h('span', {}, label),
+    h('textarea', {
+      rows: 4, placeholder,
+      onfocus: () => snapshot(),
+      oninput: e => { const v = e.target.value; if (v.trim()) obj[key] = v; else delete obj[key]; save(); },
+    }, obj[key] || ''),
+    h('p', { class: 'hint' }, hint));
 }
 
 // ---------------------------------------------------------------- fix video
@@ -1888,7 +1901,7 @@ function offlineBytes(p) {
 function timelineContext() {
   return {
     app, state, h, api, toast, save, snapshot, keyLabel, confirmButton,
-    publishSection, localSection, copyLink, playerUrl, ensureReversed, reversedReady,
+    publishSection, localSection, copyLink, playerUrl, ensureReversed, reversedReady, helpField,
     undoRedo: redo => (redo ? restore(state.redo, state.undo) : restore(state.undo, state.redo)),
   };
 }

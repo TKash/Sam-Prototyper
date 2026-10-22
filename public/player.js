@@ -72,6 +72,7 @@ async function main() {
   });
   stage.classList.add('ready');
   startClip = first;
+  helpContent = canvasHelp();
   show(first);
   bindInput();
 }
@@ -466,9 +467,113 @@ const MENU_URL = new URLSearchParams(location.search).has('menu') ? '/gallery' :
 const toMenu = GALLERY ? () => GALLERY.close() : MENU_URL ? () => { location.href = MENU_URL; } : null;
 
 function builtInKey(e, restart) {
-  if (e.code === 'KeyR' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); restart(); return true; }
+  if (e.ctrlKey || e.metaKey || e.altKey) return false;
+  if (e.code === 'KeyR') { e.preventDefault(); restart(); return true; }
   if (e.code === 'KeyM' && toMenu) { e.preventDefault(); toMenu(); return true; }
+  if (e.code === 'KeyH') { e.preventDefault(); toggleHelp(); return true; }
+  if (e.code === 'Escape' && helpBox) { e.preventDefault(); toggleHelp(false); return true; }
   return false;
+}
+
+// ---------------------------------------------------------------- help (H)
+//
+// A see-through panel over the running prototype: the designer's notes (or a
+// map of every screen when there are none), what works on the current screen,
+// and the general controls. It stays open while you navigate and follows along.
+// `helpContent` is set by the canvas or single-video player and returns
+// { title, about: [nodes], here: [[keys, what]], aboutTitle }.
+
+let helpContent = null;
+let helpBox = null;
+let helpTimer = null;
+let helpKey = '';
+
+const hEl = (tag, cls, ...kids) => {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  for (const k of kids.flat(Infinity)) if (k != null && k !== false) e.append(k instanceof Node ? k : String(k));
+  return e;
+};
+const kbd = label => hEl('kbd', '', label);
+
+function toggleHelp(open = !helpBox) {
+  if (!open) {
+    clearInterval(helpTimer);
+    helpBox?.remove();
+    helpBox = null;
+    return;
+  }
+  if (!helpContent) return;
+  helpBox = hEl('aside', 'help');
+  helpBox.setAttribute('role', 'dialog');
+  helpBox.setAttribute('aria-label', 'Help');
+  document.body.append(helpBox);
+  helpKey = '';
+  renderHelp();
+  helpTimer = setInterval(renderHelp, 150); // follows navigation while open
+}
+
+function renderHelp() {
+  const c = helpContent();
+  const key = JSON.stringify([c.title, c.aboutKey, c.here]);
+  if (key === helpKey) return;
+  helpKey = key;
+  const controls = [
+    [[kbd('H')], 'Show or hide this help'],
+    [[kbd('R')], 'Restart from the beginning'],
+    toMenu ? [[kbd('M')], 'Back to the menu of prototypes'] : null,
+    [['Double-click'], 'Full screen on or off'],
+  ].filter(Boolean);
+  const rows = list => hEl('dl', 'help-rows', list.map(([keys, what]) => [hEl('dt', '', keys), hEl('dd', '', what)]));
+  helpBox.replaceChildren(
+    hEl('header', 'help-head', hEl('h2', '', c.title), hEl('span', 'help-close', kbd('H'), ' or ', kbd('Esc'), ' to close')),
+    hEl('section', '', hEl('h3', '', c.aboutTitle || 'About this prototype'), c.about),
+    hEl('section', '', hEl('h3', '', 'On this screen'),
+      c.here.length ? rows(c.here.map(([keys, what]) => [keys.map(k => (typeof k === 'string' && k.startsWith('key:') ? kbd(k.slice(4)) : k)), what])) : hEl('p', 'help-muted', 'Nothing to press here. This screen just plays.')),
+    hEl('section', '', hEl('h3', '', 'Controls'), rows(controls)),
+  );
+}
+
+// Designer text: blank lines separate paragraphs.
+const paragraphs = text => String(text || '').trim().split(/\n\s*\n/).filter(Boolean).map(t => hEl('p', '', t.trim()));
+
+function canvasHelp() {
+  let screenId = null;
+  return () => {
+    if (clips.has(current) && !String(current).startsWith('rev:')) screenId = current;
+    const here = clips.get(screenId) || clips.get(startClip);
+    const nameOf = id => clips.get(id)?.name || 'another screen';
+    const k = t => `key:${t.label || t.code || '?'}`;
+    const actions = [];
+    for (const t of here?.triggers || []) {
+      if (!clips.has(t.to)) continue;
+      if (t.type === 'key' && t.code) actions.push([[k(t)], `Go to ${nameOf(t.to)}`]);
+      else if (t.type === 'click') actions.push([['Click'], `Go to ${nameOf(t.to)}`]);
+      else if (t.type === 'end') actions.push([['Wait'], `${nameOf(t.to)} plays ${t.delay ? `${+(t.delay / 1000).toFixed(2)}s after` : 'when'} this video ends`]);
+    }
+    for (const c of project.clips) {
+      for (const t of c.triggers || []) {
+        const r = t.reverse;
+        if (t.to === here?.id && r?.enabled && r.file && r.code) actions.push([[`key:${r.label || r.code}`], `Rewind back to ${c.name}`]);
+      }
+    }
+    for (const t of project.globalTriggers || []) {
+      if (t.type === 'key' && t.code && clips.has(t.to) && !actions.some(a => a[0][0] === k(t))) actions.push([[k(t)], `Go to ${nameOf(t.to)} (works on every screen)`]);
+    }
+    // No designer text: a map of every screen and where its keys lead.
+    let about = paragraphs(project.help);
+    if (here?.note) about.push(hEl('p', 'help-note', here.note));
+    if (!project.help) {
+      about = [
+        here?.note ? hEl('p', 'help-note', here.note) : null,
+        hEl('ol', 'help-map', project.clips.map(c => {
+          const exits = (c.triggers || []).filter(t => clips.has(t.to)).map(t => (t.type === 'key' ? `${t.label || '?'} → ${nameOf(t.to)}` : t.type === 'click' ? `click → ${nameOf(t.to)}` : `then ${nameOf(t.to)}`));
+          return hEl('li', c.id === here?.id ? 'here' : '', hEl('strong', '', c.name), exits.length ? hEl('span', '', exits.join(' · ')) : null);
+        })),
+      ];
+    }
+    return { title: project.name || 'Prototype', aboutTitle: project.help ? 'About this prototype' : 'All screens', aboutKey: [here?.id, project.help], about, here: actions };
+  };
 }
 
 function restartPrototype() {
@@ -727,6 +832,25 @@ async function runTimeline() {
   stage.classList.add('ready');
   if (stops.includes(0)) { F.currentTime = at(0); prepareBack(); }
   else goForward();
+
+  helpContent = () => {
+    const at = frame >= last ? 'end' : stops.indexOf(frame);
+    const custom = (project.stops || []).find(st => st.frame === frame && st.key?.code)?.key;
+    const cont = `key:${custom?.label || keys.next?.label || '?'}`;
+    const here = [];
+    if (mode === 'paused') {
+      if (frame < last) here.push([[cont], nextStop(frame) != null ? 'Play on to the next stop' : 'Play to the end']);
+      else if (project.end === 'restart') here.push([[cont], 'Start again from the beginning']);
+      if (keys.click && frame < last) here.push([['Click'], 'Also plays on']);
+    } else here.push([['…'], mode === 'forward' ? 'Playing to the next stop' : 'Playing backwards']);
+    if (R && keys.back?.enabled && frame > 0) here.push([[`key:${keys.back.label || '?'}`], prevStop(frame) != null ? 'Back to the previous stop' : 'Back to the start']);
+    const named = (project.stops || []).filter(st => stops.includes(st.frame)).sort((x, y) => x.frame - y.frame);
+    const about = project.help ? paragraphs(project.help) : [
+      hEl('p', '', named.length ? `One video that pauses at ${named.length} stop${named.length === 1 ? '' : 's'}.` : 'One video that plays straight through.'),
+      named.length ? hEl('ol', 'help-map', named.map((st, i) => hEl('li', st.frame === frame ? 'here' : '', hEl('strong', '', st.name || `Stop ${i + 1}`)))) : null,
+    ];
+    return { title: project.name || 'Prototype', aboutTitle: project.help ? 'About this prototype' : 'Stops', aboutKey: [at, mode, project.help], about, here };
+  };
 
   const continueCode = () => stopKey.get(frame) || keys.next?.code;
   window.addEventListener('keydown', e => {

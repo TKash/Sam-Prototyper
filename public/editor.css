@@ -222,7 +222,8 @@ button.icon { padding: 4px 8px; }
 .section:last-child { border-bottom: 0; }
 .field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
 .field > span { color: var(--muted); font-size: 12px; }
-.field input, .field select { width: 100%; }
+.field input, .field select, .field textarea { width: 100%; }
+.field textarea { font: inherit; font-size: 13px; color: var(--text); background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; resize: vertical; min-height: 64px; }
 .trigger { display: grid; grid-template-columns: auto 1fr auto; gap: 6px; align-items: center; }
 .trigger select { min-width: 0; width: 100%; }
 .keycap { min-width: 92px; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12px; }
