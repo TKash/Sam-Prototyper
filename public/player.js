@@ -149,7 +149,12 @@ function prepareVideo(clip, src) {
   v.addEventListener('ended', () => {
     if (current !== clip.id) return;
     if (v._onEnd) { const f = v._onEnd; v._onEnd = null; return f(); } // a reverse finishing
-    if (onEnd) follow(onEnd); // otherwise hold the last frame
+    if (!onEnd) return; // hold the last frame
+    if (!(onEnd.delay > 0)) return follow(onEnd);
+    // Hold the last frame for the delay. Any switch meanwhile (a key, a click,
+    // a rewind) changes switchToken, which cancels it.
+    const token = switchToken;
+    setTimeout(() => { if (token === switchToken && current === clip.id) follow(onEnd); }, onEnd.delay);
   });
   stage.append(v);
   videos.set(clip.id, v);

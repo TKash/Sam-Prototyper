@@ -17,7 +17,7 @@ Open http://localhost:5180 (set `PORT` to change it). Needs Node 18+. Nothing to
 - Any stop can use its own "Continue with" key instead of the default.
 
 **Clips on a canvas**: several videos laid out like Figma frames and joined by connectors, with branching paths.
-- A connector fires on a **key press**, a **click**, or **after the video ends**. Each clip can have only one "after video ends" connector.
+- A connector fires on a **key press**, a **click**, or **after the video ends**. Each clip can have only one "after video ends" connector, and it can have a **delay** (ms) that holds the clip's last frame before moving on. A key press or click during the delay takes over.
 - Clips that aren't followed automatically either **loop** or **hold** their last frame.
 - Animation: **Instant** or **Dissolve** (50–3000 ms).
 - **Reverse with a key**: press a key on the target clip to rewind back to where you came from. The player remembers the route you actually took, so back keys retrace that path.

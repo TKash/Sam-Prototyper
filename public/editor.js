@@ -733,7 +733,7 @@ function arrowHead(tip, from, size) {
 }
 
 function triggerText(t) {
-  if (t.type === 'end') return 'On end';
+  if (t.type === 'end') return t.delay ? `On end +${+(t.delay / 1000).toFixed(2)}s` : 'On end';
   if (t.type === 'click') return 'Click';
   return t.label || 'Set key';
 }
@@ -1126,7 +1126,7 @@ function renderPopover() {
         { value: 'click', label: 'Click' },
         { value: 'end', label: 'After video ends', disabled: !!otherEnd, title: otherEnd ? 'This clip already has an "after video ends" connection' : null },
       ], t.type, v => {
-        set(() => { t.type = v; if (v !== 'key') { delete t.code; delete t.label; } });
+        set(() => { t.type = v; if (v !== 'key') { delete t.code; delete t.label; } if (v !== 'end') delete t.delay; });
         if (v === 'key' && !t.code) { state.listening = t; renderPopover(); }
       }),
     ),
@@ -1138,7 +1138,17 @@ function renderPopover() {
       }, state.listening === t ? 'Press a key…' : t.label || 'Click to set'),
       duplicateKeyWarning(from, t),
     ) : null,
-    t.type === 'end' ? h('p', { class: 'hint' }, 'Plays the next clip as soon as this one finishes (looping is turned off for this clip).') : null,
+    t.type === 'end' ? h('div', { class: 'pop-field' },
+      h('span', {}, 'Delay'),
+      h('label', { class: 'inline' },
+        h('input', {
+          type: 'number', min: 0, max: 60000, step: 100, value: String(t.delay || 0),
+          onchange: e => set(() => { const d = clamp(Math.round(Number(e.target.value) || 0), 0, 60000); if (d) t.delay = d; else delete t.delay; }),
+        }), 'ms'),
+      h('p', { class: 'hint' }, t.delay
+        ? `When this clip finishes, its last frame stays on screen for ${+(t.delay / 1000).toFixed(2)}s, then the next clip plays (looping is turned off for this clip).`
+        : 'Plays the next clip as soon as this one finishes (looping is turned off for this clip). Add a delay to hold the last frame first.'),
+    ) : null,
     h('div', { class: 'pop-field' },
       h('span', {}, 'Navigate to'),
       h('select', { onchange: e => set(() => { t.to = e.target.value; }) },
