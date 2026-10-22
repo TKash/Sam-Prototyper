@@ -159,6 +159,7 @@ window.addEventListener('hashchange', route);
 route();
 
 async function route() {
+  if (state.saveTimer) await flushSave();
   const m = location.hash.match(/^#\/edit\/([\w-]+)/);
   if (!m) return renderHome();
   try {
@@ -170,6 +171,7 @@ async function route() {
     state.lan = info.lan || [];
     state.hosted = Boolean(info.hosted);
     state.timeline = null;
+    savedJson.set(proj.id, contentJson(proj));
     if (proj.mode === 'timeline') {
       state.project = proj;
       state.timeline = mountTimeline(timelineContext());
@@ -430,6 +432,15 @@ async function backfillCovers(list, thumbs) {
 
 // ---------------------------------------------------------------- saving + undo
 
+// Saving is batched: a change is written once you've paused for SAVE_DELAY,
+// a save with nothing new in it is skipped, and anything pending is written
+// straight away when you leave (another prototype, the home screen, another
+// tab, closing the page). The hosted version's free plan allows 1,000 writes
+// a day, so each one counts.
+const SAVE_DELAY = 2000;
+const savedJson = new Map(); // project id -> content as last saved
+const contentJson = p => { const { updatedAt, ...content } = p; return JSON.stringify(content); };
+
 function save() {
   if (!state.project) return;
   ensureCover();
@@ -437,34 +448,68 @@ function save() {
   state.saving = true;
   updateSaved();
   clearTimeout(state.saveTimer);
-  state.saveTimer = setTimeout(async () => {
-    try {
-      await putProject(state.project);
-      state.saving = false;
-    } catch (e) {
-      if (e.status !== 409) toast(`Save failed: ${e.message}`);
-    }
-    updateSaved();
-  }, 300);
+  state.saveTimer = setTimeout(() => flushSave(), SAVE_DELAY);
 }
+
+async function flushSave({ keepalive = false } = {}) {
+  clearTimeout(state.saveTimer);
+  state.saveTimer = null;
+  const p = state.project;
+  if (!p) return;
+  if (contentJson(p) === savedJson.get(p.id)) {
+    state.saving = false;
+    updateSaved();
+    return;
+  }
+  try {
+    await putProject(p, { keepalive });
+    if (state.project === p && !state.saveTimer) state.saving = false;
+  } catch (e) {
+    if (e.status !== 409) toast(`Save failed: ${e.message}`);
+  }
+  updateSaved();
+}
+
+// The player, exports and downloads read the saved version, so pending edits
+// are written first. The tab is opened right away (inside the click, so it
+// isn't blocked as a popup) and pointed at the player once the save is done.
+function openSaved(url) {
+  if (!state.saveTimer) return window.open(url, '_blank');
+  const w = window.open('', '_blank');
+  flushSave().then(() => { if (w) w.location.href = url; else window.open(url, '_blank'); });
+}
+
+// Write what's pending before the page goes away or out of view.
+const flushOnLeave = () => { if (state.saveTimer) flushSave({ keepalive: true }); };
+addEventListener('pagehide', flushOnLeave);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushOnLeave(); });
 
 // Saves run one at a time and say which version they're based on (If-Match:
 // updatedAt). If the prototype was changed elsewhere meanwhile — another tab,
 // another laptop — the server refuses (409) and we load the latest instead of
 // silently overwriting it.
 let saveChain = Promise.resolve();
-function putProject(p) {
+function putProject(p, { keepalive = false } = {}) {
   const run = async () => {
+    const content = contentJson(p);
+    const body = JSON.stringify(p);
     try {
       const saved = await api(`/api/projects/${p.id}`, {
         method: 'PUT',
         headers: p.updatedAt ? { 'If-Match': p.updatedAt } : {},
-        body: JSON.stringify(p),
+        body,
+        // Lets the save finish after the page closes (browsers cap these at 64 KB).
+        keepalive: keepalive && body.length < 60_000,
       });
       p.updatedAt = saved.updatedAt;
+      savedJson.set(p.id, content);
       return saved;
     } catch (e) {
       if (e.status === 409 && state.project?.id === p.id) {
+        // Drop this version so leaving doesn't try to save it again.
+        savedJson.set(p.id, contentJson(p));
+        clearTimeout(state.saveTimer);
+        state.saveTimer = null;
         toast('This prototype was changed somewhere else, so the latest version was loaded. Please redo your last change.', 7000);
         route();
       }
@@ -565,7 +610,7 @@ function renderEditor() {
       h('button', { onclick: () => fileInput.click() }, '+ Add videos'),
       fileInput,
       h('button', { onclick: copyLink }, 'Copy link'),
-      h('button', { class: 'primary', onclick: () => window.open(playerUrl(), '_blank'), disabled: !p.clips.length }, '▶ Play'),
+      h('button', { class: 'primary', onclick: () => openSaved(playerUrl()), disabled: !p.clips.length }, '▶ Play'),
     ),
     h('div', { class: 'body' }, dom.canvas, dom.inspector),
   ));
@@ -1625,7 +1670,7 @@ function renderInspector() {
         c.id === p.startClip
           ? h('span', { class: 'muted' }, h('span', { class: 'badge' }, 'Start'), 'Prototype starts here')
           : h('button', { onclick: () => commit(() => { p.startClip = c.id; }) }, 'Set as start'),
-        h('button', { onclick: () => window.open(`${playerUrl()}?start=${c.id}`, '_blank') }, 'Play from here'),
+        h('button', { onclick: () => openSaved(`${playerUrl()}?start=${c.id}`) }, 'Play from here'),
       ),
       h('label', { class: 'field' }, h('span', {}, 'When it ends'),
         hasEnd
@@ -1793,7 +1838,10 @@ function localSection() {
     h('p', { class: 'hint' }, `One .html file with every video inside (about ${fmtSize(offlineBytes(p))}). Share it on Teams, SharePoint or email — viewers double-click it; no internet or server needed.`),
     h('div', { class: 'row' },
       hasMedia(p)
-        ? h('a', { class: 'button-link', href: `/api/projects/${p.id}/offline`, download: '' }, 'Download offline file')
+        ? h('a', {
+          class: 'button-link', href: `/api/projects/${p.id}/offline`, download: '',
+          onclick: e => { if (state.saveTimer) { e.preventDefault(); flushSave().then(() => { location.href = e.currentTarget?.href || `/api/projects/${p.id}/offline`; }); } },
+        }, 'Download offline file')
         : h('button', { disabled: true }, 'Download offline file'),
     ),
   );
@@ -1901,7 +1949,7 @@ function offlineBytes(p) {
 function timelineContext() {
   return {
     app, state, h, api, toast, save, snapshot, keyLabel, confirmButton,
-    publishSection, localSection, copyLink, playerUrl, ensureReversed, reversedReady, helpField,
+    publishSection, localSection, copyLink, playerUrl, openSaved, ensureReversed, reversedReady, helpField,
     undoRedo: redo => (redo ? restore(state.redo, state.undo) : restore(state.undo, state.redo)),
   };
 }
@@ -1917,7 +1965,7 @@ function publishSection() {
         h('button', { onclick: copyLink }, 'Copy'),
       ),
       h('p', { class: 'hint' }, 'Anyone with this link can play the prototype. Changes go live as soon as they are saved.'),
-      h('div', { class: 'row' }, h('button', { onclick: () => window.open(playerUrl(), '_blank'), disabled: !hasMedia(p) }, 'Open')),
+      h('div', { class: 'row' }, h('button', { onclick: () => openSaved(playerUrl()), disabled: !hasMedia(p) }, 'Open')),
     );
   }
   return h('div', { class: 'section' },
@@ -2007,8 +2055,7 @@ async function publish() {
   state.publishing = true;
   renderPanel();
   try {
-    clearTimeout(state.saveTimer); // make sure the latest edits are on disk first
-    await putProject(p);
+    await flushSave(); // make sure the latest edits are on disk first
     const res = await api(`/api/projects/${p.id}/publish`, { method: 'POST' });
     Object.assign(p, { publicUrl: res.publicUrl, pagesProject: res.pagesProject, publishedAt: res.publishedAt, unpublishedChanges: false });
     toast(`Live at ${res.publicUrl}`, 5000);
@@ -2021,6 +2068,7 @@ async function publish() {
 
 async function exportFolder() {
   try {
+    await flushSave();
     const { dir } = await api(`/api/projects/${state.project.id}/export`, { method: 'POST' });
     toast(`Exported to ${dir}`, 6000);
   } catch (e) {

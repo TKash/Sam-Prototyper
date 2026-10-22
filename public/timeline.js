@@ -59,7 +59,7 @@ export function mountTimeline(ctx) {
       class: 'title', value: proj.name, 'aria-label': 'Prototype name',
       oninput: e => { p().name = e.target.value; document.title = `${p().name} · Clip Proto`; save(); },
     });
-    el.play = h('button', { class: 'primary', onclick: () => window.open(ctx.playerUrl(), '_blank') }, '▶ Play');
+    el.play = h('button', { class: 'primary', onclick: () => ctx.openSaved(ctx.playerUrl()) }, '▶ Play');
 
     el.video = h('video', { class: 'tl-video', preload: 'auto', playsInline: true });
     el.video.addEventListener('play', updateTransport);
