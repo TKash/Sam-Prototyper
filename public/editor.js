@@ -173,11 +173,13 @@ async function route() {
     if (proj.mode === 'timeline') {
       state.project = proj;
       state.timeline = mountTimeline(timelineContext());
+      ensureCover();
       return;
     }
     state.project = migrate(proj);
     renderEditor();
     fitView();
+    ensureCover();
   } catch (e) {
     toast(e.message);
     location.hash = '';
@@ -251,13 +253,19 @@ async function renderHome() {
         h('strong', {}, 'Clips on a canvas'),
         h('span', {}, 'Several videos connected like Figma frames, with branching paths.')),
     ),
+    gallerySection(),
     h('h3', {}, 'Your prototypes'),
     list,
   ));
   const projects = await api('/api/projects');
+  const thumbs = new Map();
   list.replaceChildren(...projects.map(p => h('div', { class: 'project-item' },
+    thumbs.set(p.id, h('div', { class: 'thumb' }, p.cover ? h('img', { src: `/media/${p.cover}`, alt: '' }) : null)).get(p.id),
     h('a', { href: `#/edit/${p.id}` }, p.name),
     h('span', { class: 'muted' }, p.mode === 'timeline' ? `Single video · ${p.stops} stop${p.stops === 1 ? '' : 's'}` : `Canvas · ${p.clips} clip${p.clips === 1 ? '' : 's'}`),
+    h('label', { class: 'gallery-toggle', title: 'Show this prototype in the client gallery' },
+      h('input', { type: 'checkbox', checked: p.gallery !== false, onchange: e => setInGallery(p.id, e.target.checked, e.target) }),
+      'In gallery'),
     h('button', { class: 'ghost', onclick: () => window.open(`/p/${p.id}`, '_blank') }, 'Play'),
     confirmButton({
       cls: 'ghost danger',
@@ -269,12 +277,92 @@ async function renderHome() {
       },
     }),
   )));
+  backfillCovers(projects.filter(p => !p.cover && p.gallery !== false && (p.mode === 'timeline' ? p.hasVideo : p.clips > 0)), thumbs);
+}
+
+// ---------------------------------------------------------------- client gallery
+//
+// /gallery lists every prototype that's "In gallery", each with a cover image
+// (a still from its start video, made here and uploaded as a small .jpg).
+// Prototypes opened from it get ?menu, so M returns to it; R restarts.
+
+function gallerySection() {
+  const url = `${location.origin}/gallery`;
+  return h('div', { class: 'gallery-box' },
+    h('div', {},
+      h('strong', {}, 'Client gallery'),
+      h('p', { class: 'hint' }, 'One link with every prototype marked "In gallery". In a prototype opened from it, R restarts and M comes back to the gallery.')),
+    h('div', { class: 'link-box' }, h('input', { readOnly: true, value: url, onfocus: e => e.target.select() })),
+    h('div', { class: 'row' },
+      h('button', { onclick: async () => { await navigator.clipboard.writeText(url).catch(() => {}); toast('Gallery link copied'); } }, 'Copy link'),
+      h('button', { class: 'ghost', onclick: () => window.open('/gallery', '_blank') }, 'Open')),
+  );
+}
+
+async function setInGallery(id, on, input) {
+  input.disabled = true;
+  try {
+    const p = await api(`/api/projects/${id}`);
+    if (on) delete p.gallery; else p.gallery = false;
+    await api(`/api/projects/${id}`, { method: 'PUT', headers: p.updatedAt ? { 'If-Match': p.updatedAt } : {}, body: JSON.stringify(p) });
+  } catch (e) {
+    toast(e.message);
+    input.checked = !on;
+  }
+  input.disabled = false;
+}
+
+const coverSource = p => (p.mode === 'timeline' ? p.video?.file : (p.clips.find(c => c.id === p.startClip) || p.clips[0])?.file) || null;
+
+async function uploadCover(src) {
+  const url = await poster(src);
+  if (!url) return null;
+  const blob = await (await fetch(url)).blob();
+  const r = await fetch('/api/upload', { method: 'POST', headers: { 'x-filename': 'cover.jpg' }, body: blob });
+  const res = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(res.error || 'cover upload failed');
+  return res.file;
+}
+
+// Keeps the open prototype's cover in step with its start video.
+let coverJob = null;
+async function ensureCover() {
+  const p = state.project;
+  const src = p && coverSource(p);
+  if (!src || p.cover?.src === src || coverJob === `${p.id}:${src}`) return;
+  coverJob = `${p.id}:${src}`;
+  try {
+    const file = await uploadCover(src);
+    if (file && state.project === p && coverSource(p) === src) {
+      p.cover = { file, src };
+      save();
+    }
+  } catch { /* the gallery shows a placeholder instead */ }
+  coverJob = null;
+}
+
+// Prototypes made before covers existed: make theirs one at a time.
+async function backfillCovers(list, thumbs) {
+  for (const item of list) {
+    if (state.project) return; // an editor was opened meanwhile
+    try {
+      const p = await api(`/api/projects/${item.id}`);
+      const src = coverSource(p);
+      if (!src || p.cover?.src === src) continue;
+      const file = await uploadCover(src);
+      if (!file) continue;
+      p.cover = { file, src };
+      await api(`/api/projects/${p.id}`, { method: 'PUT', headers: p.updatedAt ? { 'If-Match': p.updatedAt } : {}, body: JSON.stringify(p) });
+      thumbs.get(item.id)?.replaceChildren(h('img', { src: `/media/${file}`, alt: '' }));
+    } catch { /* try again next time the list opens */ }
+  }
 }
 
 // ---------------------------------------------------------------- saving + undo
 
 function save() {
   if (!state.project) return;
+  ensureCover();
   if (state.project.publicUrl) state.project.unpublishedChanges = true;
   state.saving = true;
   updateSaved();
@@ -344,7 +432,7 @@ function restore(from, to) {
   to.push(JSON.stringify(state.project));
   // Publish info and already-made reversed videos are never undone.
   const p = state.project;
-  const keep = { publicUrl: p.publicUrl, pagesProject: p.pagesProject, publishedAt: p.publishedAt, reversed: p.reversed, updatedAt: p.updatedAt };
+  const keep = { publicUrl: p.publicUrl, pagesProject: p.pagesProject, publishedAt: p.publishedAt, reversed: p.reversed, cover: p.cover, updatedAt: p.updatedAt };
   state.project = Object.assign(JSON.parse(json), keep);
   if (state.sel && !(state.sel.type === 'clip' ? clipById(state.sel.id) : findConn(state.sel.id))) state.sel = null;
   reconcileReverse();

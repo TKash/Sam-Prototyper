@@ -26,12 +26,14 @@ const MIME = {
   '.css': 'text/css; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
   '.svg': 'image/svg+xml',
+  '.jpg': 'image/jpeg',
   '.mp4': 'video/mp4',
   '.m4v': 'video/mp4',
   '.mov': 'video/quicktime',
   '.webm': 'video/webm',
 };
 const VIDEO_EXT = new Set(['.mp4', '.m4v', '.mov', '.webm']);
+const UPLOAD_EXT = new Set([...VIDEO_EXT, '.jpg']); // .jpg: prototype covers for the gallery
 const PLAYER_FILES = ['player.html', 'player.js', 'player.css'];
 
 class HttpError extends Error {
@@ -76,7 +78,7 @@ async function saveProject(p) {
 async function receiveUpload(req) {
   const name = decodeURIComponent(req.headers['x-filename'] || 'clip.mp4');
   const ext = path.extname(name).toLowerCase();
-  if (!VIDEO_EXT.has(ext)) throw new HttpError(415, 'Only .mp4, .m4v, .mov or .webm files');
+  if (!UPLOAD_EXT.has(ext)) throw new HttpError(415, 'Only .mp4, .m4v, .mov or .webm files');
   const tmp = path.join(MEDIA, `upload-${newId()}.part`);
   const hash = crypto.createHash('sha1');
   const out = fs.createWriteStream(tmp);
@@ -269,6 +271,25 @@ function publishError(raw) {
   return new HttpError(502, `Cloudflare publish failed:\n${detail}`);
 }
 
+// Same fields the hosted worker keeps as KV list metadata.
+async function listProjects() {
+  const files = (await fsp.readdir(PROJECTS)).filter(f => f.endsWith('.json'));
+  const list = await Promise.all(files.map(async f => {
+    const p = JSON.parse(await fsp.readFile(path.join(PROJECTS, f), 'utf8'));
+    return {
+      id: p.id, name: p.name, mode: p.mode || 'canvas', clips: p.clips.length, stops: p.stops?.length || 0, hasVideo: Boolean(p.video),
+      cover: p.cover?.file || null, gallery: p.gallery !== false, updatedAt: p.updatedAt,
+    };
+  }));
+  return list.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+}
+
+// The client gallery: prototypes with something to play, unless hidden from it.
+const galleryList = list => list
+  .filter(p => p.gallery !== false && (p.mode === 'timeline' ? p.hasVideo : p.clips > 0))
+  .map(({ id, name, mode, clips, stops, cover }) => ({ id, name, mode, clips, stops, cover }))
+  .sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { numeric: true, sensitivity: 'base' }));
+
 async function route(req, res, url) {
   const parts = url.pathname.split('/').filter(Boolean);
   const method = req.method;
@@ -277,12 +298,7 @@ async function route(req, res, url) {
 
   if (url.pathname === '/api/projects') {
     if (method === 'GET') {
-      const files = (await fsp.readdir(PROJECTS)).filter(f => f.endsWith('.json'));
-      const list = await Promise.all(files.map(async f => {
-        const p = JSON.parse(await fsp.readFile(path.join(PROJECTS, f), 'utf8'));
-        return { id: p.id, name: p.name, mode: p.mode || 'canvas', clips: p.clips.length, stops: p.stops?.length || 0, hasVideo: Boolean(p.video), updatedAt: p.updatedAt };
-      }));
-      return json(res, 200, list.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || '')));
+      return json(res, 200, await listProjects());
     }
     if (method === 'POST') {
       const body = JSON.parse((await readBody(req)) || '{}');
@@ -321,6 +337,8 @@ async function route(req, res, url) {
   }
 
   if (url.pathname === '/api/upload' && method === 'POST') return json(res, 201, await receiveUpload(req));
+  if (url.pathname === '/api/gallery' && method === 'GET') return json(res, 200, galleryList(await listProjects()));
+  if (url.pathname === '/gallery' || url.pathname === '/gallery/') return sendFile(req, res, path.join(PUBLIC, 'gallery.html'), 'no-cache');
 
   if (parts[0] === 'media' && parts.length === 2) {
     const file = path.join(MEDIA, path.basename(parts[1]));

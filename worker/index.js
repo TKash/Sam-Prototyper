@@ -11,7 +11,7 @@
 
 const PART = 24 * 1024 * 1024; // a multiple of 3 (and under KV's 25 MiB value limit)
 const SESSION_COOKIE = 'cp_session';
-const MIME = { '.mp4': 'video/mp4', '.m4v': 'video/mp4', '.mov': 'video/quicktime', '.webm': 'video/webm' };
+const MIME = { '.mp4': 'video/mp4', '.m4v': 'video/mp4', '.mov': 'video/quicktime', '.webm': 'video/webm', '.jpg': 'image/jpeg' }; // .jpg: gallery covers
 const PLAYER_ASSETS = new Set(['player.js', 'player.css']);
 
 class HttpError extends Error {
@@ -27,7 +27,7 @@ const newId = () => {
   return btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 };
 const validId = id => /^[\w-]{4,32}$/.test(id);
-const validFile = f => /^[\w-]{6,64}\.(mp4|m4v|mov|webm)$/.test(f);
+const validFile = f => /^[\w-]{6,64}\.(mp4|m4v|mov|webm|jpg)$/.test(f);
 
 // ---------------------------------------------------------------- auth
 
@@ -69,6 +69,7 @@ async function saveProject(env, p) {
   const metadata = {
     name: String(p.name || '').slice(0, 200), mode: p.mode || 'canvas',
     clips: p.clips?.length || 0, stops: p.stops?.length || 0, hasVideo: Boolean(p.video), updatedAt: p.updatedAt,
+    cover: p.cover?.file || null, gallery: p.gallery !== false,
   };
   await env.STORE.put(`project:${p.id}`, JSON.stringify(p), { metadata });
   return p;
@@ -84,6 +85,13 @@ async function listProjects(env) {
   } while (cursor);
   return out.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
 }
+
+// The client gallery, straight from list metadata: prototypes with something
+// to play, unless hidden from it. Same as server.js.
+const galleryList = list => list
+  .filter(p => p.gallery !== false && (p.mode === 'timeline' ? p.hasVideo : p.clips > 0))
+  .map(({ id, name, mode, clips, stops, cover }) => ({ id, name, mode, clips, stops, cover: cover || null }))
+  .sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { numeric: true, sensitivity: 'base' }));
 
 function newProject(body) {
   const p = { id: newId(), name: String(body.name || 'Untitled prototype').slice(0, 120), startClip: null, fit: 'contain', sound: false, clips: [], globalTriggers: [] };
@@ -182,12 +190,14 @@ async function route(request, env) {
   const authed = () => isAuthed(request, env);
   const requireAuth = async () => { if (!(await authed())) throw new HttpError(401, 'Please sign in'); };
 
-  // Public: play links, their assets, project JSON (read), media.
+  // Public: play links, their assets, project JSON (read), media, the gallery.
   if (parts[0] === 'p' && parts.length === 2) {
     const asset = PLAYER_ASSETS.has(parts[1]) ? parts[1] : 'player.html';
     return env.ASSETS.fetch(new Request(new URL(`/${asset}`, url), request));
   }
   if (parts[0] === 'media' && parts.length === 2 && method === 'GET') return serveMedia(env, parts[1]);
+  if (url.pathname === '/gallery' || url.pathname === '/gallery/') return env.ASSETS.fetch(new Request(new URL('/gallery.html', url), request));
+  if (url.pathname === '/api/gallery' && method === 'GET') return json(200, galleryList(await listProjects(env)));
   if (url.pathname === '/api/info') return json(200, { hosted: true, lan: [], authed: await authed() });
   if (url.pathname === '/api/login' && method === 'POST') return login(request, env);
   if (url.pathname === '/api/logout' && method === 'POST') {

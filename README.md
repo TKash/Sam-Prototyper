@@ -32,6 +32,7 @@ Rewinds use a reversed copy of the video that the editor makes in your browser (
 
 ## Sharing
 
+- **Client gallery:** `/gallery` shows every prototype marked **In gallery** (a switch on the editor's home screen) as a grid of cards, sorted by name, so number them to set the order. Arrow keys and Enter choose one. Inside a prototype opened from the gallery, **M** goes back to it. **R** restarts any prototype. A prototype's own key connections take priority over R and M. Each card's cover is a still from the prototype's start video, made by the editor.
 - **Local preview / same Wi-Fi:** the editor shows a link that points to this machine. It only works while the server is running.
 - **Offline file:** one `.html` file with every video inside. Send it over Teams, SharePoint or email, and viewers just double-click it. No internet or server needed.
 - **Export folder:** writes `exports/<name>-<id>/` (index.html, player files, project.json, media/) for any static host. It has to be served over http(s); opening it from `file://` won't work.

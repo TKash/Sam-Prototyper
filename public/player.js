@@ -68,6 +68,7 @@ async function main() {
     if (cover.classList.contains('on') && current) paintStill(current);
   });
   stage.classList.add('ready');
+  startClip = first;
   show(first);
   bindInput();
 }
@@ -450,6 +451,24 @@ function unlockSound() {
   if (v) v.muted = false;
 }
 
+// Built-in keys, used only when the prototype doesn't use the key itself:
+// R restarts; M returns to the client gallery when opened from it (?menu).
+let startClip = null;
+const MENU_URL = new URLSearchParams(location.search).has('menu') ? '/gallery' : null;
+
+function builtInKey(e, restart) {
+  if (e.code === 'KeyR' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); restart(); return true; }
+  if (e.code === 'KeyM' && MENU_URL) { e.preventDefault(); location.href = MENU_URL; return true; }
+  return false;
+}
+
+function restartPrototype() {
+  if (!startClip) return;
+  routes.length = 0;
+  for (const v of videos.values()) v._onEnd = null;
+  show(startClip);
+}
+
 function findTrigger(match) {
   const clip = clips.get(current);
   return (clip?.triggers || []).find(match) || (project.globalTriggers || []).find(match);
@@ -470,7 +489,7 @@ function bindInput() {
     } else if (back) {
       e.preventDefault();
       startReverse(back);
-    }
+    } else builtInKey(e, restartPrototype);
   });
   window.addEventListener('pointerdown', e => {
     if (e.button !== 0) return;
@@ -706,6 +725,7 @@ async function runTimeline() {
     unlockTimelineSound();
     if (e.code === continueCode()) { e.preventDefault(); goForward(); }
     else if (R && e.code === keys.back.code) { e.preventDefault(); goBack(); }
+    else builtInKey(e, restart);
   });
   window.addEventListener('pointerdown', e => {
     if (e.button !== 0) return;
