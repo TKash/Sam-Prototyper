@@ -288,6 +288,8 @@ async function renderHome() {
 
 function gallerySection() {
   const url = `${location.origin}/gallery`;
+  const size = h('span', {});
+  estimateGallerySize(size);
   return h('div', { class: 'gallery-box' },
     h('div', {},
       h('strong', {}, 'Client gallery'),
@@ -296,7 +298,75 @@ function gallerySection() {
     h('div', { class: 'row' },
       h('button', { onclick: async () => { await navigator.clipboard.writeText(url).catch(() => {}); toast('Gallery link copied'); } }, 'Copy link'),
       h('button', { class: 'ghost', onclick: () => window.open('/gallery', '_blank') }, 'Open')),
+    h('p', { class: 'hint' }, 'Offline file: one .html with the whole gallery and every video inside. Share it on Teams, SharePoint or email; viewers double-click it, no internet needed. ', size),
+    h('div', { class: 'row' }, h('button', { onclick: e => buildGalleryFile(e.currentTarget) }, 'Download offline file')),
   );
+}
+
+// The prototypes in the gallery, each with its full project and the media it plays.
+async function galleryProjects() {
+  const list = await api('/api/gallery');
+  return Promise.all(list.map(async item => {
+    const p = await api(`/api/projects/${item.id}`);
+    return { item, p, files: mediaFiles(p) };
+  }));
+}
+
+async function estimateGallerySize(el) {
+  try {
+    const seen = new Map();
+    for (const { p } of await galleryProjects()) {
+      const sizes = new Map([...p.clips.map(c => [c.file, c.size]), ...p.clips.flatMap(c => c.triggers || []).filter(t => t.reverse?.file).map(t => [t.reverse.file, t.reverse.size])]);
+      if (p.video) sizes.set(p.video.file, p.video.size);
+      for (const r of Object.values(p.reversed || {})) sizes.set(r.file, r.size);
+      for (const f of mediaFiles(p)) seen.set(f, sizes.get(f) || 0);
+    }
+    const bytes = [...seen.values()].reduce((a, b) => a + b, 0) * 4 / 3;
+    el.textContent = `About ${fmtSize(bytes)}.`;
+  } catch { el.textContent = ''; }
+}
+
+// gallery.html with the prototypes, covers, player and videos embedded (each
+// video once, even when several prototypes use it). Opened from disk, it shows
+// the same gallery and plays prototypes in a frame over it (see gallery.html).
+async function buildGalleryFile(button) {
+  const label = button.textContent;
+  button.disabled = true;
+  try {
+    button.textContent = 'Preparing…';
+    const [projects, { head, tail, js }, galleryHtml] = await Promise.all([
+      galleryProjects(), playerParts(), fetch('/gallery.html').then(r => { if (!r.ok) throw new Error("Couldn't load the gallery page"); return r.text(); }),
+    ]);
+    if (!projects.length) throw new Error('No prototypes are marked "In gallery".');
+    const json = x => JSON.stringify(x).replace(/</g, '\\u003c');
+    const list = [];
+    for (const { item, p } of projects) {
+      // A prototype without a saved cover yet gets one made here (same still).
+      const coverUrl = item.cover ? await dataUrlOf(`/media/${item.cover}`).catch(() => null) : null;
+      const made = coverUrl || (coverSource(p) && await poster(coverSource(p)));
+      list.push({ ...item, cover: made ? item.cover || 'embedded' : null, coverUrl: made || null });
+    }
+    const data = [
+      `<script type="application/json" id="cp-gallery">${json(list)}</script>\n`,
+      `<script type="application/json" id="cp-player">${json({ head, tail, js })}</script>\n`,
+      ...projects.map(({ p }) => `<script type="application/json" data-cp-proj="${p.id}">${playableJson(p)}</script>\n`),
+    ].join('');
+    const files = [...new Set(projects.flatMap(x => x.files))];
+    const media = [];
+    for (let i = 0; i < files.length; i++) {
+      button.textContent = `Preparing ${i + 1} / ${files.length}…`;
+      media.push(await embeddedMedia(files[i]));
+    }
+    const [beforeData, rest] = galleryHtml.split('<!--cp-offline-data-->');
+    const [script, afterMedia] = (rest || '').split('<!--cp-offline-media-->');
+    if (afterMedia === undefined) throw new Error('gallery.html layout changed');
+    downloadHtml([beforeData, data, script, ...media, afterMedia], 'Prototypes');
+  } catch (e) {
+    toast(e.message, 6000);
+  } finally {
+    button.textContent = label;
+    button.disabled = false;
+  }
 }
 
 async function setInGallery(id, on, input) {
@@ -1736,41 +1806,64 @@ async function buildOfflineFile(button) {
   const label = button.textContent;
   button.disabled = true;
   try {
-    const text = async f => { const r = await fetch(`/${f}`); if (!r.ok) throw new Error(`Couldn't load ${f}`); return r.text(); };
-    const [html, css, js] = await Promise.all([text('player.html'), text('player.css'), text('player.js')]);
-    // Inline <script>/<style> content must never contain a closing tag.
-    const safe = x => x.replace(/<\/(script|style)/gi, '<\\/$1');
-    const { pagesProject, publicUrl, publishedAt, unpublishedChanges, ...playable } = p;
-    const [head, tail] = html
-      .replace('<link rel="stylesheet" href="player.css">', `<style>\n${safe(css)}\n</style>`)
-      .replace(/<script type="module" src="player.js"><\/script>/, '%%PLAYER%%')
-      .split('%%PLAYER%%');
-    if (tail === undefined) throw new Error('player.html layout changed');
-    const projectJson = JSON.stringify(playable).replace(/</g, '\\u003c');
-    const parts = [head, `<script type="application/json" id="cp-project">${projectJson}</script>\n`];
+    const { head, tail, js } = await playerParts();
+    const parts = [head, `<script type="application/json" id="cp-project">${playableJson(p)}</script>\n`];
     const files = mediaFiles(p);
     for (let i = 0; i < files.length; i++) {
       button.textContent = `Preparing ${i + 1} / ${files.length}…`;
-      const r = await fetch(`/media/${files[i]}`);
-      if (!r.ok) throw new Error(`Couldn't load video ${files[i]}`);
-      const blob = await r.blob();
-      const dataUrl = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(blob); });
-      const type = r.headers.get('content-type') || 'video/mp4';
-      parts.push(`<script type="application/octet-stream" data-cp-media="${files[i]}" data-type="${type}">`, dataUrl.slice(dataUrl.indexOf(',') + 1), '</script>\n');
+      parts.push(await embeddedMedia(files[i]));
     }
-    parts.push(`<script type="module">\n${safe(js)}\n</script>`, tail);
-    const fileName = (p.name || 'prototype').replace(/[\\/:*?"<>|]+/g, ' ').trim() || 'prototype';
-    const a = h('a', { href: URL.createObjectURL(new Blob(parts, { type: 'text/html' })), download: `${fileName}.html` });
-    document.body.append(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(a.href), 60_000);
+    parts.push(`<script type="module">\n${js}\n</script>`, tail);
+    downloadHtml(parts, p.name || 'prototype');
   } catch (e) {
     toast(e.message, 6000);
   } finally {
     button.textContent = label;
     button.disabled = false;
   }
+}
+
+// Inline <script>/<style> content must never contain a closing tag.
+const safeInline = x => x.replace(/<\/(script|style)/gi, '<\\/$1');
+
+// player.html with its CSS inlined, split where the project and player.js go.
+async function playerParts() {
+  const text = async f => { const r = await fetch(`/${f}`); if (!r.ok) throw new Error(`Couldn't load ${f}`); return r.text(); };
+  const [html, css, js] = await Promise.all([text('player.html'), text('player.css'), text('player.js')]);
+  const [head, tail] = html
+    .replace('<link rel="stylesheet" href="player.css">', `<style>\n${safeInline(css)}\n</style>`)
+    .replace(/<script type="module" src="player.js"><\/script>/, '%%PLAYER%%')
+    .split('%%PLAYER%%');
+  if (tail === undefined) throw new Error('player.html layout changed');
+  return { head, tail, js: safeInline(js) };
+}
+
+function playableJson(p) {
+  const { pagesProject, publicUrl, publishedAt, unpublishedChanges, cover, gallery, ...playable } = p;
+  return JSON.stringify(playable).replace(/</g, '\\u003c');
+}
+
+async function dataUrlOf(path) {
+  const r = await fetch(path);
+  if (!r.ok) throw new Error(`Couldn't load ${path}`);
+  const blob = await r.blob();
+  return new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(blob); });
+}
+
+// One media file as the base64 <script> block the player decodes.
+async function embeddedMedia(file) {
+  const dataUrl = await dataUrlOf(`/media/${file}`);
+  const type = dataUrl.slice(5, dataUrl.indexOf(';')) || 'video/mp4';
+  return `<script type="application/octet-stream" data-cp-media="${file}" data-type="${type}">${dataUrl.slice(dataUrl.indexOf(',') + 1)}</script>\n`;
+}
+
+function downloadHtml(parts, name) {
+  const fileName = name.replace(/[\\/:*?"<>|]+/g, ' ').trim() || 'prototype';
+  const a = h('a', { href: URL.createObjectURL(new Blob(parts, { type: 'text/html' })), download: `${fileName}.html` });
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 60_000);
 }
 
 // Rough size of the offline .html: every media file the player loads, base64-encoded (×4/3).

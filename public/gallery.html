@@ -65,6 +65,10 @@
     }
     .empty, .error { color: var(--muted); padding: 60px 0; text-align: center; }
 
+    .player-frame { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; background: #000; z-index: 10; }
+    body.playing { overflow: hidden; }
+    body.playing .keys { display: none; }
+
     @media (max-width: 720px) {
       header { padding: 32px 16px 4px; }
       main { padding: 16px 16px 100px; }
@@ -83,22 +87,33 @@
     <span><kbd>R</kbd>restart a prototype</span>
     <span><kbd>M</kbd>back to this menu</span>
   </div>
+  <!--cp-offline-data-->
   <script>
+    // Online: cards link to /p/<id>?menu. In the offline file (built by the
+    // editor's "Download offline file"), prototypes, covers and videos are
+    // embedded in this page: a card opens its prototype in a full-screen frame
+    // over the gallery, and M (in the player) closes it again.
+    const OFFLINE = document.getElementById('cp-gallery');
     const grid = document.getElementById('grid');
     const PLAY = '<svg width="20" height="20" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg>';
     const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
     const kind = p => (p.mode === 'timeline' ? 'Interactive video' : `${p.clips} screen${p.clips === 1 ? '' : 's'}`);
 
-    fetch('/api/gallery').then(r => (r.ok ? r.json() : Promise.reject(new Error(r.status)))).then(list => {
+    const load = OFFLINE
+      ? Promise.resolve(JSON.parse(OFFLINE.textContent))
+      : fetch('/api/gallery').then(r => (r.ok ? r.json() : Promise.reject(new Error(r.status))));
+
+    load.then(list => {
       document.getElementById('count').textContent = list.length ? `${list.length} prototype${list.length === 1 ? '' : 's'}` : '';
       if (!list.length) return grid.replaceWith(el('p', 'empty', 'No prototypes yet.'));
       for (const p of list) {
         const a = el('a', 'card');
-        a.href = `/p/${encodeURIComponent(p.id)}?menu`;
+        a.dataset.id = p.id;
+        a.href = OFFLINE ? '#' : `/p/${encodeURIComponent(p.id)}?menu`;
         const cover = el('div', 'cover');
         if (p.cover) {
           const img = el('img');
-          img.src = `/media/${p.cover}`;
+          img.src = p.coverUrl || `/media/${p.cover}`;
           img.alt = '';
           img.loading = 'lazy';
           img.onerror = () => img.replaceWith(el('div', 'placeholder', p.name));
@@ -113,10 +128,14 @@
         grid.append(a);
       }
       // Come back to the card you left from.
-      const last = sessionStorageGet();
-      const back = [...grid.children].find(c => c.getAttribute('href').startsWith(`/p/${last}?`));
+      const back = grid.querySelector(`.card[data-id="${CSS.escape(sessionStorageGet() || '')}"]`);
       (back || grid.firstElementChild)?.focus({ preventScroll: !back });
-      grid.addEventListener('click', e => { const c = e.target.closest('.card'); if (c) sessionStorageSet(c.getAttribute('href').split('/')[2].split('?')[0]); });
+      grid.addEventListener('click', e => {
+        const c = e.target.closest('.card');
+        if (!c) return;
+        sessionStorageSet(c.dataset.id);
+        if (OFFLINE) { e.preventDefault(); openPrototype(c.dataset.id); }
+      });
     }).catch(() => grid.replaceWith(el('p', 'error', "Couldn't load the prototypes. Refresh to try again.")));
 
     function sessionStorageGet() { try { return sessionStorage.getItem('cp-last'); } catch { return null; } }
@@ -124,6 +143,7 @@
 
     // Arrow keys move between cards (row by row), Enter opens.
     addEventListener('keydown', e => {
+      if (document.querySelector('.player-frame')) return;
       const cards = [...grid.querySelectorAll('.card')];
       if (!cards.length) return;
       const i = cards.indexOf(document.activeElement);
@@ -134,10 +154,68 @@
         const next = i < 0 ? 0 : Math.min(cards.length - 1, Math.max(0, i + step));
         cards[next].focus();
         cards[next].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-      } else if (e.key === 'Enter' && i >= 0) {
-        sessionStorageSet(cards[i].getAttribute('href').split('/')[2].split('?')[0]);
       }
     });
+
+    // ---- offline file only: play a prototype in a frame over the gallery
+    //
+    // The player (embedded as text) runs in an iframe and asks this page for
+    // each video by file name (window.cpGallery.media). Videos are decoded from
+    // their embedded base64 once and kept as Blobs, so reopening is instant.
+    const blobs = new Map(); // file -> Promise<Blob>
+    const parsed = () => (document.readyState === 'loading' ? new Promise(r => addEventListener('DOMContentLoaded', r, { once: true })) : null);
+
+    window.cpGallery = {
+      media(file, onProgress = () => {}) {
+        if (!blobs.has(file)) {
+          blobs.set(file, (async () => {
+            await parsed(); // the videos come after this script in the file
+            const node = document.querySelector(`script[data-cp-media="${CSS.escape(file)}"]`);
+            if (!node) throw new Error(`Missing embedded video ${file}`);
+            const b64 = node.textContent.replace(/\s+/g, '');
+            const type = node.dataset.type || 'video/mp4';
+            node.remove(); // the Blob below is kept instead of the text
+            const STEP = 4 * 1024 * 1024; // a multiple of 4 base64 characters
+            const parts = [];
+            for (let i = 0; i < b64.length; i += STEP) {
+              const bin = atob(b64.slice(i, i + STEP));
+              const bytes = new Uint8Array(bin.length);
+              for (let j = 0; j < bin.length; j++) bytes[j] = bin.charCodeAt(j);
+              parts.push(bytes);
+              onProgress(Math.min(i + STEP, b64.length) * 0.75);
+              await new Promise(r => setTimeout(r, 0));
+            }
+            return new Blob(parts, { type });
+          })());
+        }
+        return blobs.get(file);
+      },
+      close: closePrototype,
+    };
+
+    function openPrototype(id) {
+      closePrototype();
+      const proj = document.querySelector(`script[data-cp-proj="${CSS.escape(id)}"]`);
+      const player = JSON.parse(document.getElementById('cp-player').textContent);
+      const frame = el('iframe', 'player-frame');
+      // "*": the embedded page has no origin of its own to name (opened from disk).
+      frame.allow = 'fullscreen *; autoplay *';
+      frame.srcdoc = player.head
+        + `<script type="application/json" id="cp-project">${proj.textContent}<\/script>\n`
+        + `<script type="module">\n${player.js}\n<\/script>` + player.tail;
+      frame.addEventListener('load', () => frame.contentWindow.focus());
+      document.body.append(frame);
+      document.body.classList.add('playing');
+    }
+
+    function closePrototype() {
+      const frame = document.querySelector('.player-frame');
+      if (!frame) return;
+      frame.remove(); // drops the prototype's video elements and decoders
+      document.body.classList.remove('playing');
+      grid.querySelector(`.card[data-id="${CSS.escape(sessionStorageGet() || '')}"]`)?.focus();
+    }
   </script>
+  <!--cp-offline-media-->
 </body>
 </html>

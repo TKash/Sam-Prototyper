@@ -9,6 +9,9 @@ const MEDIA_BASE = served ? '/media/' : 'media/';
 // Offline single-file build: project + media are embedded in the page itself
 // (see /api/projects/:id/offline), so nothing is fetched at all.
 const EMBEDDED = document.getElementById('cp-project');
+// Inside the offline gallery file: the gallery page around this frame holds
+// the videos (shared between prototypes) and closes the frame on M.
+const GALLERY = (() => { try { return window.parent !== window ? window.parent.cpGallery || null : null; } catch { return null; } })();
 
 const stage = document.getElementById('stage');
 const bar = document.querySelector('#progress div');
@@ -107,6 +110,10 @@ async function preloadAll(list) {
     bar.style.width = `${Math.min(100, (sum / total) * 100)}%`;
   };
 
+  if (GALLERY) {
+    for (const [file] of files) blobs.set(file, URL.createObjectURL(await GALLERY.media(file, got => { loaded.set(file, got); tick(); })));
+    return blobs;
+  }
   if (EMBEDDED) {
     for (const [file] of files) blobs.set(file, await decodeEmbedded(file, got => { loaded.set(file, got); tick(); }));
     return blobs;
@@ -452,13 +459,15 @@ function unlockSound() {
 }
 
 // Built-in keys, used only when the prototype doesn't use the key itself:
-// R restarts; M returns to the client gallery when opened from it (?menu).
+// R restarts; M returns to the client gallery when opened from it (?menu, or
+// the offline gallery file).
 let startClip = null;
 const MENU_URL = new URLSearchParams(location.search).has('menu') ? '/gallery' : null;
+const toMenu = GALLERY ? () => GALLERY.close() : MENU_URL ? () => { location.href = MENU_URL; } : null;
 
 function builtInKey(e, restart) {
   if (e.code === 'KeyR' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); restart(); return true; }
-  if (e.code === 'KeyM' && MENU_URL) { e.preventDefault(); location.href = MENU_URL; return true; }
+  if (e.code === 'KeyM' && toMenu) { e.preventDefault(); toMenu(); return true; }
   return false;
 }
 
