@@ -3,6 +3,7 @@
 // (key / click / after the video ends) and animation.
 
 import { reverseVideo } from './reverse.js';
+import { fixVideo } from './convert.js';
 import { mountTimeline } from './timeline.js';
 
 const app = document.getElementById('app');
@@ -28,6 +29,7 @@ const state = {
   spaceDown: false,
   drag: null,
   revJobs: new Map(), // source file -> { pct, error } while a reversed copy is being made
+  fixJobs: new Map(), // clip id -> { phase, pct, error } while "Fix video" runs
 };
 
 // ---------------------------------------------------------------- utils
@@ -483,6 +485,29 @@ function nextFreeSpot() {
 
 const posters = new Map(); // file -> Promise<dataURL | null>
 
+// Whether this browser can decode a video at all (e.g. Chrome can't play
+// MPEG-4 Part 2 "mp4v" exports). Unknown until checked; frames re-render then.
+const playable = new Map(); // file -> true | false
+const playChecks = new Set();
+function checkPlayable(file) {
+  if (playable.has(file) || playChecks.has(file)) return;
+  playChecks.add(file);
+  const v = document.createElement('video');
+  v.muted = true;
+  v.preload = 'auto';
+  const done = ok => {
+    if (playable.has(file)) return;
+    playable.set(file, ok);
+    v.removeAttribute('src');
+    v.load();
+    if (!ok) renderAll();
+  };
+  v.addEventListener('loadeddata', () => done(v.videoWidth > 0), { once: true });
+  v.addEventListener('error', () => done(false), { once: true });
+  setTimeout(() => done(true), 20000); // slow to load isn't the same as broken
+  v.src = `/media/${file}`;
+}
+
 // Poster = the most "content-ful" of a few sampled frames, so clips that fade in
 // from black don't get a black thumbnail.
 function poster(file) {
@@ -524,6 +549,7 @@ function renderFrames() {
   for (const c of p.clips) {
     alive.add(c.id);
     let f = dom.frameEls.get(c.id);
+    if (f && f.file !== c.file) { f.el.remove(); dom.frameEls.delete(c.id); f = null; }
     if (!f) f = createFrame(c);
     f.el.style.left = `${c.x}px`;
     f.el.style.top = `${c.y}px`;
@@ -532,6 +558,7 @@ function renderFrames() {
     f.el.classList.toggle('selected', state.sel?.type === 'clip' && state.sel.id === c.id);
     f.name.textContent = c.name;
     f.badge.hidden = c.id !== p.startClip;
+    f.el.classList.toggle('broken', playable.get(c.file) === false);
   }
   for (const [id, f] of dom.frameEls) if (!alive.has(id)) { f.el.remove(); dom.frameEls.delete(id); }
 
@@ -556,10 +583,12 @@ function createFrame(c) {
     h('div', { class: 'frame-label' }, badge, name),
     body,
     play,
+    h('div', { class: 'broken-msg' }, h('strong', {}, "Can't play this video"), 'Select it and click Fix video'),
     h('div', { class: 'handle', title: 'Drag to connect' }),
   );
-  const f = { el, body, img, play, name, badge, video: null };
+  const f = { el, body, img, play, name, badge, video: null, file: c.file };
   poster(c.file).then(url => { if (url) img.src = url; });
+  checkPlayable(c.file);
   play.addEventListener('pointerdown', e => e.stopPropagation());
   play.addEventListener('click', e => { e.stopPropagation(); togglePreview(c, f); });
   dom.frames.append(el);
@@ -1325,6 +1354,7 @@ function renderInspector() {
             h('option', { value: 'loop', selected: c.end.type === 'loop' }, 'Loop'),
             h('option', { value: 'hold', selected: c.end.type === 'hold' }, 'Hold last frame'),
           )),
+      fixSection(c),
       h('div', { class: 'row' },
         confirmButton({ cls: 'danger-outline', label: `${TRASH_ICON} Delete frame`, armedLabel: 'Click again to delete', title: `Delete ${c.name}`, onConfirm: () => deleteClip(c) }),
       ),
@@ -1351,6 +1381,85 @@ function renderInspector() {
   sections.push(publishSection(), localSection());
 
   dom.inspector.replaceChildren(...sections);
+}
+
+// ---------------------------------------------------------------- fix video
+//
+// Re-encodes the frame's video as plain H.264 (video only) in the browser —
+// for exports browsers can't play, or that play badly — then swaps the new
+// file in. Connections stay; undo goes back to the original file.
+
+const FIX_PHASES = {
+  download: 'Reading the video…',
+  load: 'Loading the converter (about 32 MB, first time only)…',
+  convert: 'Converting…',
+};
+
+function fixSection(c) {
+  const job = state.fixJobs.get(c.id);
+  const broken = playable.get(c.file) === false;
+  if (job && !job.error) {
+    return h('div', { class: 'field fix' },
+      h('span', {}, 'Fix video'),
+      h('div', { class: 'rev-progress', 'data-fix': c.id }, fixStatus(job)));
+  }
+  return h('div', { class: 'field fix' },
+    h('span', {}, 'Fix video'),
+    job?.error ? h('p', { class: 'warn' }, `Couldn't fix the video: ${job.error}`)
+      : broken ? h('p', { class: 'warn' }, "This browser can't play this video (it uses an unsupported format). Fix it to convert it to standard H.264.")
+        : h('p', { class: 'hint' }, "Converts the video to standard H.264 without sound. Use it if the video doesn't play, or stutters."),
+    h('div', { class: 'row' }, h('button', { class: broken ? 'primary' : '', onclick: () => fixClip(c.id) }, job?.error ? 'Try again' : 'Fix video')),
+  );
+}
+
+function fixStatus(job) {
+  const pct = job.phase === 'convert' ? job.pct : 0;
+  return [
+    `${FIX_PHASES[job.phase] || 'Working…'}${job.phase === 'convert' ? ` ${Math.round(pct * 100)}%` : ''}`,
+    h('div', { class: 'bar' }, h('div', { style: `width:${pct * 100}%` })),
+  ];
+}
+
+// Progress updates only touch the status line, so typing in the panel isn't interrupted.
+function updateFixStatus(id) {
+  const el = document.querySelector(`[data-fix="${id}"]`);
+  const job = state.fixJobs.get(id);
+  if (el && job) el.replaceChildren(...fixStatus(job));
+}
+
+async function fixClip(id) {
+  const c = clipById(id);
+  if (!c) return;
+  const running = state.fixJobs.get(id);
+  if (running && !running.error) return;
+  const file = c.file;
+  const job = { phase: 'download', pct: 0, error: null };
+  state.fixJobs.set(id, job);
+  renderInspector();
+  try {
+    const blob = await fixVideo(`/media/${file}`, (phase, pct) => {
+      job.phase = phase;
+      job.pct = pct;
+      updateFixStatus(id);
+    });
+    const name = `${(c.name || 'video').replace(/[\\/:*?"<>|]+/g, ' ').trim() || 'video'}-fixed.mp4`;
+    const r = await fetch('/api/upload', { method: 'POST', headers: { 'x-filename': encodeURIComponent(name) }, body: blob });
+    const res = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(res.error || 'upload failed');
+    const meta = await probe(`/media/${res.file}`);
+    if (!meta.width) throw new Error("the converted video still won't play in this browser");
+    playable.set(res.file, true);
+    state.fixJobs.delete(id);
+    const clip = clipById(id);
+    // Only swap if the frame still shows the video that was converted.
+    if (clip && clip.file === file) {
+      commit(() => Object.assign(clip, { file: res.file, size: res.size, ...meta }));
+      toast(`${clip.name}: video fixed`);
+    } else renderAll();
+  } catch (e) {
+    job.error = e.message || String(e);
+    renderAll();
+  }
 }
 
 function globalTriggersSection() {

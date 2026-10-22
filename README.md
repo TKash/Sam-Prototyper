@@ -22,6 +22,7 @@ Open http://localhost:5180 (set `PORT` to change it). Needs Node 18+. Nothing to
 - Animation: **Instant** or **Dissolve** (50–3000 ms).
 - **Reverse with a key**: press a key on the target clip to rewind back to where you came from. The player remembers the route you actually took, so back keys retrace that path.
 - Undo/redo, and **Play from here** on any clip (opens the player with `?start=<clipId>`).
+- **Fix video** (in a frame's panel): re-encodes the frame's video as standard H.264 without sound, in your browser, and swaps it in. Frames the browser can't play (for example MPEG-4 Part 2 exports) are marked "Can't play this video". It uses ffmpeg compiled to WebAssembly, loaded from jsDelivr (about 32 MB the first time).
 
 ## Player
 
@@ -57,5 +58,6 @@ The editor and player are also hosted at https://clip-proto.clip-proto.workers.d
 | `public/timeline.js` | Single-video editor (stops, continue/back keys) |
 | `public/player.js`, `player.html`, `player.css` | UI-less player |
 | `public/reverse.js` | In-browser reversed-video generator |
+| `public/convert.js`, `convert-worker.js` | Fix video: in-browser H.264 re-encode (ffmpeg.wasm) |
 | `server.js` | Local server: projects, media, export, offline file, Pages publish |
 | `worker/index.js`, `wrangler.toml` | Hosted version on Cloudflare Workers + KV |

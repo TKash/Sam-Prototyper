@@ -125,6 +125,16 @@ button.icon { padding: 4px 8px; }
 }
 .frame.hover .handle, .frame.edge .handle, .frame.selected .handle { opacity: 1; }
 
+/* A video this browser can't decode (see "Fix video") */
+.broken-msg {
+  display: none; position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  flex-direction: column; align-items: center; justify-content: center; gap: calc(4px / var(--z));
+  font-size: calc(12px / var(--z)); color: var(--muted); text-align: center;
+}
+.broken-msg strong { color: var(--warn); font-size: calc(13px / var(--z)); }
+.frame.broken .broken-msg { display: flex; }
+.frame.broken .play-btn { display: none; }
+
 .frame.uploading .frame-body { display: grid; place-items: center; background: var(--panel); }
 .upload-msg { font-size: 13px; color: var(--muted); width: 70%; text-align: center; transform: scale(calc(1 / var(--z))); }
 .upload-msg .bar { height: 3px; background: var(--panel-2); border-radius: 2px; margin-top: 6px; overflow: hidden; }
