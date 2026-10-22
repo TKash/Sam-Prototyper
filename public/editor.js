@@ -729,14 +729,17 @@ const NORMAL = { right: [1, 0], left: [-1, 0], top: [0, -1], bottom: [0, 1] };
 
 function connectorGeometry() {
   const p = state.project;
+  const frames = p.clips.map(c => ({ c, r: rectOf(c) }));
   const list = [];
   for (const c of p.clips) {
     for (const t of c.triggers) {
       const to = clipById(t.to);
       if (!to || to === c) continue;
       const a = rectOf(c), b = rectOf(to);
-      const [sa, sb] = pickSides(a, b);
-      list.push({ from: c, to, t, a, b, sa, sb });
+      const g = { from: c, to, t, a, b };
+      g.obs = obstaclesFor(frames, c, to);
+      [g.sa, g.sb] = chooseSides(g);
+      list.push(g);
     }
   }
   // Spread several connectors leaving/entering the same side so they don't overlap.
@@ -758,9 +761,103 @@ function connectorGeometry() {
   for (const g of list) {
     g.p1 = pointOn(g.a, g.sa, g.fa);
     g.p2 = pointOn(g.b, g.sb, g.fb);
-    g.pts = elbow(g.p1, g.sa, g.p2, g.sb);
+    g.pts = routeConnector(g.p1, g.sa, g.p2, g.sb, g.obs).pts;
+    delete g.obs;
   }
   return list;
+}
+
+// ---------------------------------------------------------------- routing around frames
+//
+// A connector's usual shape (elbow) is kept when nothing is in its way.
+// Otherwise a few alternatives are tried — through a clear channel above,
+// below or beside the frames in between, or out of a different side — and the
+// clearest, shortest one with the fewest bends wins.
+
+const ROUTE_GAP = 20;   // clearance kept around other frames
+const LABEL_H = 26;     // frame names sit above the frames
+const STUB = 24;        // straight run out of / into a frame before turning
+
+function obstaclesFor(frames, from, to) {
+  return frames.map(({ c, r }) => (c === from || c === to
+    // The two ends: lines may leave/enter them but not run across them.
+    ? { x1: r.x + 1, y1: r.y + 1, x2: r.x + r.w - 1, y2: r.y + r.h - 1 }
+    : { x1: r.x - ROUTE_GAP, y1: r.y - ROUTE_GAP - LABEL_H, x2: r.x + r.w + ROUTE_GAP, y2: r.y + r.h + ROUTE_GAP }));
+}
+
+function segmentHits(a, b, o) {
+  if (Math.abs(a.y - b.y) < 0.01) {
+    return a.y > o.y1 && a.y < o.y2 && Math.max(Math.min(a.x, b.x), o.x1) < Math.min(Math.max(a.x, b.x), o.x2);
+  }
+  return a.x > o.x1 && a.x < o.x2 && Math.max(Math.min(a.y, b.y), o.y1) < Math.min(Math.max(a.y, b.y), o.y2);
+}
+
+function simplify(pts) {
+  const out = [];
+  for (const q of pts) {
+    const last = out[out.length - 1];
+    if (last && Math.abs(last.x - q.x) < 0.01 && Math.abs(last.y - q.y) < 0.01) continue;
+    const prev = out[out.length - 2];
+    if (prev && ((Math.abs(prev.x - last.x) < 0.01 && Math.abs(last.x - q.x) < 0.01) || (Math.abs(prev.y - last.y) < 0.01 && Math.abs(last.y - q.y) < 0.01))) out.pop();
+    out.push(q);
+  }
+  return out;
+}
+
+function score(pts, obs) {
+  let hits = 0, len = 0;
+  for (let i = 1; i < pts.length; i++) {
+    len += Math.abs(pts[i].x - pts[i - 1].x) + Math.abs(pts[i].y - pts[i - 1].y);
+    for (const o of obs) if (segmentHits(pts[i - 1], pts[i], o)) hits++;
+  }
+  // A path that doubles back on itself (a U-turn on one line) is never clean.
+  let back = 0;
+  for (let i = 2; i < pts.length; i++) {
+    const ax = Math.sign(pts[i - 1].x - pts[i - 2].x), ay = Math.sign(pts[i - 1].y - pts[i - 2].y);
+    const bx = Math.sign(pts[i].x - pts[i - 1].x), by = Math.sign(pts[i].y - pts[i - 1].y);
+    if (ax === -bx && ay === -by) back++;
+  }
+  return { hits, cost: (hits + back) * 1e5 + len + (pts.length - 2) * 40 };
+}
+
+function routeConnector(p1, sa, p2, sb, obs) {
+  const def = simplify(elbow(p1, sa, p2, sb));
+  const best = { pts: def, ...score(def, obs) };
+  if (!best.hits) return best;
+  const s1 = { x: p1.x + NORMAL[sa][0] * STUB, y: p1.y + NORMAL[sa][1] * STUB };
+  const s2 = { x: p2.x + NORMAL[sb][0] * STUB, y: p2.y + NORMAL[sb][1] * STUB };
+  // Channels: through the middle, in line with either end, or just outside
+  // any frame near the way (its clearance edge is already a safe distance).
+  const xs = new Set([(s1.x + s2.x) / 2, s1.x, s2.x]);
+  const ys = new Set([(s1.y + s2.y) / 2, s1.y, s2.y]);
+  const bx1 = Math.min(s1.x, s2.x) - 600, bx2 = Math.max(s1.x, s2.x) + 600;
+  const by1 = Math.min(s1.y, s2.y) - 600, by2 = Math.max(s1.y, s2.y) + 600;
+  for (const o of obs) {
+    if (o.x2 < bx1 || o.x1 > bx2 || o.y2 < by1 || o.y1 > by2) continue;
+    xs.add(o.x1); xs.add(o.x2); ys.add(o.y1); ys.add(o.y2);
+  }
+  const consider = pts => {
+    const sc = score(pts, obs);
+    if (sc.cost < best.cost) Object.assign(best, { pts, ...sc });
+  };
+  for (const x of xs) consider(simplify([p1, s1, { x, y: s1.y }, { x, y: s2.y }, s2, p2]));
+  for (const y of ys) consider(simplify([p1, s1, { x: s1.x, y }, { x: s2.x, y }, s2, p2]));
+  return best;
+}
+
+// The usual sides, unless leaving/entering through other sides gives a clear path.
+const SIDE_PAIRS = [['right', 'left'], ['left', 'right'], ['top', 'top'], ['bottom', 'bottom'], ['bottom', 'top'], ['top', 'bottom']];
+function chooseSides(g) {
+  const usual = pickSides(g.a, g.b);
+  const center = (r, side) => pointOn(r, side, 0.5);
+  let best = { sides: usual, ...routeConnector(center(g.a, usual[0]), usual[0], center(g.b, usual[1]), usual[1], g.obs) };
+  if (!best.hits) return usual;
+  for (const sides of SIDE_PAIRS) {
+    if (sides[0] === usual[0] && sides[1] === usual[1]) continue;
+    const r = routeConnector(center(g.a, sides[0]), sides[0], center(g.b, sides[1]), sides[1], g.obs);
+    if (r.cost + 60 < best.cost) best = { sides, ...r }; // a small preference for the usual sides
+  }
+  return best.sides;
 }
 
 function elbow(p1, side, p2, side2) {
