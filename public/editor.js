@@ -1291,7 +1291,7 @@ function reverseSection(from, t) {
     status = h('div', { class: 'rev-progress' }, `Making reversed video… ${Math.round(job.pct * 100)}%`,
       h('div', { class: 'bar' }, h('div', { style: `width:${job.pct * 100}%` })));
   } else if (r.file) {
-    status = h('p', { class: 'hint ok' }, '✓ Reversed video ready');
+    status = h('p', { class: 'hint ok' }, '✓ Reversed video ready · ', reversedDownload(r.file, src?.name));
   }
 
   return h('div', { class: 'pop-field rev' },
@@ -1313,6 +1313,12 @@ function reverseSection(from, t) {
       : `Rewinds ${from.name} and stops on its first frame.`),
     status,
   );
+}
+
+// A link that saves a reversed copy, named after its source video.
+function reversedDownload(file, name) {
+  const base = (name || 'video').replace(/[\\/:*?"<>|]+/g, ' ').replace(/\.\w+$/, '').trim() || 'video';
+  return h('a', { class: 'link-btn', href: `/media/${file}`, download: `${base}-reversed.mp4` }, 'Download');
 }
 
 function toggleReverse(t, on) {
@@ -1683,7 +1689,7 @@ function offlineBytes(p) {
 function timelineContext() {
   return {
     app, state, h, api, toast, save, snapshot, keyLabel, confirmButton,
-    publishSection, localSection, copyLink, playerUrl, ensureReversed,
+    publishSection, localSection, copyLink, playerUrl, ensureReversed, reversedDownload,
     undoRedo: redo => (redo ? restore(state.redo, state.undo) : restore(state.undo, state.redo)),
   };
 }
