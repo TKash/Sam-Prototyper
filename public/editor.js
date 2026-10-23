@@ -336,7 +336,7 @@ async function buildGalleryFile(button) {
   button.disabled = true;
   try {
     button.textContent = 'Preparing…';
-    const [projects, { head, tail, js }, galleryHtml] = await Promise.all([
+    let [projects, { head, tail, js }, galleryHtml] = await Promise.all([
       galleryProjects(), playerParts(), fetch('/gallery.html').then(r => { if (!r.ok) throw new Error("Couldn't load the gallery page"); return r.text(); }),
     ]);
     if (!projects.length) throw new Error('No prototypes are marked "In gallery".');
@@ -359,6 +359,11 @@ async function buildGalleryFile(button) {
       button.textContent = `Preparing ${i + 1} / ${files.length}…`;
       media.push(await embeddedMedia(files[i]));
     }
+    // The phone remote's script goes inline (a file opened from disk can't load
+    // it), with this site's address for the QR code's /remote link.
+    const remoteJs = await fetch('/remote-link.js').then(r => (r.ok ? r.text() : ''));
+    galleryHtml = galleryHtml.replace(/<script src="\/remote-link\.js"[^>]*><\/script>/,
+      () => `<script>window.CLIP_PROTO_ORIGIN = ${JSON.stringify(location.origin)};\n${safeInline(remoteJs)}\n</script>`);
     const [beforeData, rest] = galleryHtml.split('<!--cp-offline-data-->');
     const [script, afterMedia] = (rest || '').split('<!--cp-offline-media-->');
     if (afterMedia === undefined) throw new Error('gallery.html layout changed');

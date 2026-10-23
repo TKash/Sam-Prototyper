@@ -339,6 +339,7 @@ async function route(req, res, url) {
   if (url.pathname === '/api/upload' && method === 'POST') return json(res, 201, await receiveUpload(req));
   if (url.pathname === '/api/gallery' && method === 'GET') return json(res, 200, galleryList(await listProjects()));
   if (url.pathname === '/gallery' || url.pathname === '/gallery/') return sendFile(req, res, path.join(PUBLIC, 'gallery.html'), 'no-cache');
+  if (url.pathname === '/remote' || url.pathname === '/remote/') return sendFile(req, res, path.join(PUBLIC, 'remote.html'), 'no-cache');
 
   if (parts[0] === 'media' && parts.length === 2) {
     const file = path.join(MEDIA, path.basename(parts[1]));

@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#0f1012">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>TV Remote · Clip Proto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=JetBrains+Mono:wght@400&display=swap">
+<style>
+/* The phone remote for Clip Proto. Design and behaviour from the Figma TV Remote
+   (github.com/TKash/figma-remote-); pairing and keys in remote-link.js. */
+/* One file, two modes: a quiet setup column for the laptop, a flat full-height remote for the phone. */
+:root {
+  --bg: #0f1012;
+  --key: #1e1f23;       /* button surface */
+  --key-hi: #2e3035;    /* pressed */
+  --ink: #e8e9ec;
+  --muted: #83878f;
+  --line: #26282d;
+  --ok: #3ddc84;
+  --wait: #e8b04a;
+  --bad: #ef6a5e;
+  --sans: "Inter", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 15px/1.55 var(--sans);
+  padding: env(safe-area-inset-top, 0px) 16px env(safe-area-inset-bottom, 0px);
+}
+[hidden] { display: none !important; }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 1px solid var(--ink); outline-offset: 3px; }
+
+/* ---------- Remote (phone) ---------- */
+.remote {
+  height: 100%; max-width: 420px; margin: 0 auto; padding-block: 16px 20px;
+  display: flex; flex-direction: column; align-items: center; justify-content: space-between; gap: 16px;
+  user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: manipulation;
+}
+.status { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+.status i { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); }
+.status[data-s="linked"] i { background: var(--ok); }
+.status[data-s="waiting"] i { background: var(--wait); }
+.status[data-s="down"] i { background: var(--bad); }
+
+.dpad {
+  --pad: min(76vw, 280px, 42vh);
+  position: relative; width: var(--pad); height: var(--pad); border-radius: 50%;
+  background: var(--key); overflow: hidden; flex: none;
+}
+.dpad .dir {
+  position: absolute; inset: 0; border: 0; background: transparent; cursor: pointer; padding: 0;
+  transition: background-color .08s;
+}
+.dpad .dir[data-k="UP"]    { clip-path: polygon(50% 50%, 0 0, 100% 0); }
+.dpad .dir[data-k="DOWN"]  { clip-path: polygon(50% 50%, 0 100%, 100% 100%); }
+.dpad .dir[data-k="LEFT"]  { clip-path: polygon(50% 50%, 0 0, 0 100%); }
+.dpad .dir[data-k="RIGHT"] { clip-path: polygon(50% 50%, 100% 0, 100% 100%); }
+.dpad .dir svg { position: absolute; width: 20px; height: 20px; color: var(--muted); }
+.dpad .dir[data-k="UP"] svg    { top: 10%; left: calc(50% - 10px); }
+.dpad .dir[data-k="DOWN"] svg  { bottom: 10%; left: calc(50% - 10px); transform: rotate(180deg); }
+.dpad .dir[data-k="LEFT"] svg  { left: 10%; top: calc(50% - 10px); transform: rotate(-90deg); }
+.dpad .dir[data-k="RIGHT"] svg { right: 10%; top: calc(50% - 10px); transform: rotate(90deg); }
+.dpad .ok {
+  position: absolute; width: 40%; height: 40%; left: 30%; top: 30%; border-radius: 50%;
+  border: 0; background: var(--bg); font: 500 0.95rem var(--sans); letter-spacing: 0.08em;
+  cursor: pointer; transition: background-color .08s;
+}
+.pressed { background-color: var(--key-hi) !important; }
+.dpad .dir.pressed svg { color: var(--ink); }
+
+.top { display: grid; justify-items: center; }
+.voice-row { width: calc(min(76vw, 280px, 42vh) + 24px); display: flex; justify-content: flex-end; margin-bottom: -16px; position: relative; z-index: 1; }  /* sits in the empty corner beside the round D-pad */
+.cluster { display: grid; grid-template-columns: repeat(3, 1fr); justify-items: center; gap: 20px 28px; width: 100%; max-width: 300px; }
+.btn { display: grid; justify-items: center; gap: 8px; background: none; border: 0; padding: 0; cursor: pointer; }
+.btn .cap {
+  width: 56px; height: 56px; border-radius: 50%; background: var(--key); display: grid; place-items: center;
+  transition: background-color .08s;
+}
+.btn svg { width: 22px; height: 22px; }
+.btn .lbl { font-size: 11px; color: var(--muted); line-height: 1; }
+.btn.pressed { background: none !important; }
+.btn.pressed .cap { background: var(--key-hi); }
+.foot { font: 10px var(--mono); color: var(--muted); opacity: .6; letter-spacing: 0.08em; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+.nocode { max-width: 420px; margin: 0 auto; padding-block: 72px; display: grid; gap: 12px; text-align: center; }
+.nocode h1 { font-size: 1.3rem; font-weight: 500; margin: 0; }
+.nocode p { color: var(--muted); margin: 0; }
+</style>
+</head>
+<body>
+
+<main class="nocode" id="nocode" hidden>
+  <h1>TV Remote</h1>
+  <p>Open the gallery of prototypes on your computer, click <b>Phone remote</b> and scan its QR code with this phone.</p>
+</main>
+
+<!-- ============ REMOTE (phone) ============ -->
+<main class="remote" id="remote" hidden>
+  <div class="status" id="status" data-s="down" role="status"><i></i><span id="statusText">Connecting</span></div>
+
+  <div class="top">
+    <div class="voice-row">
+      <button class="btn mic" data-k="VOICE" aria-label="Voice assistant"><span class="cap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0"/><path d="M12 18v3"/></svg></span></button>
+    </div>
+
+    <div class="dpad" id="dpad">
+      <button class="dir" data-k="UP" aria-label="Up"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg></button>
+      <button class="dir" data-k="RIGHT" aria-label="Right"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg></button>
+      <button class="dir" data-k="DOWN" aria-label="Down"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg></button>
+      <button class="dir" data-k="LEFT" aria-label="Left"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg></button>
+      <button class="ok" data-k="OK" aria-label="OK">OK</button>
+    </div>
+  </div>
+
+  <div class="cluster">
+    <button class="btn" data-k="BACK"><span class="cap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 010 11H11"/></svg></span><span class="lbl">Back</span></button>
+    <button class="btn" data-k="HOME"><span class="cap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5L12 3l9 7.5"/><path d="M5 9v11h14V9"/></svg></span><span class="lbl">Home</span></button>
+    <button class="btn" data-k="MENU"><span class="cap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/></svg></span><span class="lbl">Main Menu</span></button>
+    <button class="btn" data-k="PREV"><span class="cap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M19 19L9 12l10-7z"/><path d="M5 5v14"/></svg></span><span class="lbl">Prev Proto</span></button>
+    <button class="btn" data-k="HELP"><span class="cap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.2a2.6 2.6 0 015 .9c0 1.7-2.5 2.4-2.5 4"/><path d="M12 17.2h.01"/></svg></span><span class="lbl">Help</span></button>
+    <button class="btn" data-k="NEXT"><span class="cap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5l10 7-10 7z"/><path d="M19 5v14"/></svg></span><span class="lbl">Next Proto</span></button>
+  </div>
+
+  <div class="foot" id="foot"></div>
+</main>
+
+<script src="/remote-link.js"></script>
+<script>
+/* Opened from the gallery's QR code: /remote#<pairing code>. */
+var pairId = location.hash.slice(1).toLowerCase();
+// A new code in the address (a new QR scanned into an open tab) starts over.
+addEventListener('hashchange', function () { location.reload(); });
+if (ClipRemote.ID_RE.test(pairId)) startRemote(pairId); else document.getElementById('nocode').hidden = false;
+
+function startRemote(id) {
+  document.getElementById('remote').hidden = false;
+  document.title = 'TV Remote';
+  document.getElementById('foot').textContent = 'PAIR ' + id.replace(/(.{4})/g, '$1 ').trim().toUpperCase();
+  var topic = ClipRemote.topicOf(id);
+  var statusEl = document.getElementById('status'), statusText = document.getElementById('statusText');
+  var relayUp = false, tvOn = false;
+
+  function paint() {
+    var s = !relayUp ? 'down' : tvOn ? 'linked' : 'waiting';
+    statusEl.dataset.s = s;
+    statusText.textContent = s === 'linked' ? 'Linked' :
+      s === 'waiting' ? 'Waiting for prototype' : 'Connecting';
+  }
+  var m = ClipRemote.makeMqtt({
+    url: ClipRemote.BROKER,
+    clientId: 'rc-' + Math.random().toString(36).slice(2, 12),
+    subs: [topic + '/tv'],
+    onState: function (s) { relayUp = s === 'up'; paint(); },
+    onMessage: function (t, msg) { tvOn = msg === 'on'; paint(); }
+  });
+  paint();
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) m.wake(); });
+
+  function send(k) {
+    if (m.publish(topic + '/keys', k) && navigator.vibrate) navigator.vibrate(8);
+  }
+
+  /* Press on pointerdown for speed; D-pad repeats while held, like a real remote. */
+  var repeatDelay, repeatInt, held = null;
+  function release() {
+    clearTimeout(repeatDelay); clearInterval(repeatInt);
+    if (held) held.classList.remove('pressed');
+    held = null;
+  }
+  document.querySelectorAll('[data-k]').forEach(function (el) {
+    var k = el.dataset.k, repeats = /^(UP|DOWN|LEFT|RIGHT)$/.test(k);
+    el.addEventListener('pointerdown', function (e) {
+      e.preventDefault(); release();
+      held = el; el.classList.add('pressed'); send(k);
+      if (repeats) repeatDelay = setTimeout(function () { repeatInt = setInterval(function () { send(k); }, 140); }, 450);
+    });
+    el.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); send(k); } });
+  });
+  ['pointerup', 'pointercancel', 'blur'].forEach(function (t) { window.addEventListener(t, release); });
+  document.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+}
+</script>
+</body>
+</html>

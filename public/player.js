@@ -13,6 +13,20 @@ const EMBEDDED = document.getElementById('cp-project');
 // the videos (shared between prototypes) and closes the frame on M.
 const GALLERY = (() => { try { return window.parent !== window ? window.parent.cpGallery || null : null; } catch { return null; } })();
 
+// Phone remote (remote-link.js, paired in the gallery): when this browser has
+// a pairing code, the phone's buttons arrive here as key presses. In the
+// offline gallery file the gallery page passes them on instead.
+if (served && !GALLERY) {
+  let paired = false;
+  try { paired = /^[a-z0-9]{8,32}$/.test(localStorage.getItem('cp-remote-id') || ''); } catch {}
+  if (paired) {
+    const s = document.createElement('script');
+    s.src = '/remote-link.js';
+    s.onload = () => window.ClipRemote?.listen({ onKey: k => window.ClipRemote.press(k) });
+    document.head.append(s);
+  }
+}
+
 const stage = document.getElementById('stage');
 const bar = document.querySelector('#progress div');
 const errorBox = document.getElementById('error');
@@ -23,14 +37,9 @@ let clips;
 let current = null;
 let soundPending = false;
 
-main().catch(err => {
-  hideLoadingTitle();
-  errorBox.textContent = `Couldn't load this prototype.\n${err.message}`;
-  errorBox.hidden = false;
-});
-
 // While the videos load: the prototype's name in the middle of the screen,
-// faded out once the first frame is up.
+// faded out once the first frame is up. Declared before main() runs: offline
+// files read their project without waiting, so main() uses this at once.
 let loadingTitle = null;
 function showLoadingTitle(name) {
   if (!name) return;
@@ -46,6 +55,12 @@ function hideLoadingTitle() {
   el.classList.add('done');
   setTimeout(() => el.remove(), 600);
 }
+
+main().catch(err => {
+  hideLoadingTitle();
+  errorBox.textContent = `Couldn't load this prototype.\n${err.message}`;
+  errorBox.hidden = false;
+});
 
 async function main() {
   if (EMBEDDED) {

@@ -190,13 +190,14 @@ async function route(request, env) {
   const authed = () => isAuthed(request, env);
   const requireAuth = async () => { if (!(await authed())) throw new HttpError(401, 'Please sign in'); };
 
-  // Public: play links, their assets, project JSON (read), media, the gallery.
+  // Public: play links, their assets, project JSON (read), media, the gallery, the phone remote.
   if (parts[0] === 'p' && parts.length === 2) {
     const asset = PLAYER_ASSETS.has(parts[1]) ? parts[1] : 'player.html';
     return env.ASSETS.fetch(new Request(new URL(`/${asset}`, url), request));
   }
   if (parts[0] === 'media' && parts.length === 2 && method === 'GET') return serveMedia(env, parts[1]);
   if (url.pathname === '/gallery' || url.pathname === '/gallery/') return env.ASSETS.fetch(new Request(new URL('/gallery.html', url), request));
+  if (url.pathname === '/remote' || url.pathname === '/remote/') return env.ASSETS.fetch(new Request(new URL('/remote.html', url), request));
   if (url.pathname === '/api/gallery' && method === 'GET') return json(200, galleryList(await listProjects(env)));
   if (url.pathname === '/api/info') return json(200, { hosted: true, lan: [], authed: await authed() });
   if (url.pathname === '/api/login' && method === 'POST') return login(request, env);
