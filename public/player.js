@@ -157,24 +157,42 @@ async function preloadAll(list) {
     return blobs;
   }
 
+  // Each video is downloaded whole and checked against its size; a download
+  // cut short (it happens on slow or flaky connections) is tried again rather
+  // than played as a video that stops early.
+  const download = async (file, size) => {
+    const res = await fetch(MEDIA_BASE + file);
+    if (!res.ok) throw new Error(`Missing video ${file} (${res.status})`);
+    // The project records each file's exact size; the response's own length is
+    // the fallback (for files saved without one).
+    const expected = size || Number(res.headers.get('content-length')) || 0;
+    const reader = res.body.getReader();
+    const parts = [];
+    let got = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      parts.push(value);
+      got += value.length;
+      loaded.set(file, got);
+      tick();
+    }
+    if (expected && got !== expected) throw Object.assign(new Error(`Video ${file} only partly downloaded (${got} of ${expected} bytes)`), { partial: true });
+    return URL.createObjectURL(new Blob(parts, { type: res.headers.get('content-type') || 'video/mp4' }));
+  };
   const queue = [...files];
   const worker = async () => {
     while (queue.length) {
-      const [file] = queue.shift();
-      const res = await fetch(MEDIA_BASE + file);
-      if (!res.ok) throw new Error(`Missing video ${file} (${res.status})`);
-      const reader = res.body.getReader();
-      const parts = [];
-      let got = 0;
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        parts.push(value);
-        got += value.length;
-        loaded.set(file, got);
-        tick();
+      const [file, size] = queue.shift();
+      for (let attempt = 1; ; attempt++) {
+        try {
+          blobs.set(file, await download(file, size));
+          break;
+        } catch (e) {
+          loaded.set(file, 0);
+          if (attempt >= 3) throw new Error(`Couldn't download a video completely. Check the connection and reload. (${e.message})`);
+        }
       }
-      blobs.set(file, URL.createObjectURL(new Blob(parts, { type: res.headers.get('content-type') || 'video/mp4' })));
     }
   };
   await Promise.all(Array.from({ length: Math.min(3, files.length) }, worker));

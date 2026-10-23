@@ -839,12 +839,54 @@ function createFrame(c) {
   return f;
 }
 
+// The preview downloads the whole video first and plays it from memory, like
+// the player. Streaming it straight from the server stalled heavy files
+// (a 4K export can need ~14 MB/s) part-way, and every loop started over.
+const previewBlobs = new Map(); // file -> Promise<blob URL>; the last few are kept
+function previewSrc(file, onProgress, size = 0) {
+  if (!previewBlobs.has(file)) {
+    previewBlobs.set(file, (async () => {
+      const res = await fetch(`/media/${file}`);
+      if (!res.ok) throw new Error(`Couldn't load the video (${res.status})`);
+      const total = size || Number(res.headers.get('content-length')) || 0;
+      const reader = res.body.getReader();
+      const parts = [];
+      let got = 0;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        parts.push(value);
+        got += value.length;
+        if (total) onProgress(got / total);
+      }
+      if (total && got !== total) throw new Error('The video only partly downloaded. Try again.');
+      return URL.createObjectURL(new Blob(parts, { type: res.headers.get('content-type') || 'video/mp4' }));
+    })());
+    previewBlobs.get(file).catch(() => previewBlobs.delete(file));
+    while (previewBlobs.size > 4) { // keep memory in check
+      const [old, url] = previewBlobs.entries().next().value;
+      previewBlobs.delete(old);
+      // Free it unless a frame is still showing it (it would stop working).
+      url.then(u => { if (![...document.querySelectorAll('video.preview')].some(v => v.src === u)) URL.revokeObjectURL(u); }, () => {});
+    }
+  }
+  return previewBlobs.get(file);
+}
+
 function togglePreview(c, f) {
+  if (f.loading) return;
   if (!f.video) {
-    f.video = h('video', { class: 'preview', src: `/media/${c.file}`, muted: true, loop: true, playsInline: true, autoplay: true });
-    f.video.addEventListener('ended', () => setPlayIcon(f, false));
-    f.body.append(f.video);
+    f.loading = h('div', { class: 'preview-loading' }, 'Loading…');
+    f.body.append(f.loading);
     setPlayIcon(f, true);
+    previewSrc(c.file, pct => { if (f.loading) f.loading.textContent = `Loading… ${Math.round(pct * 100)}%`; }, c.size)
+      .then(src => {
+        f.video = h('video', { class: 'preview', src, muted: true, loop: true, playsInline: true, autoplay: true });
+        f.video.addEventListener('ended', () => setPlayIcon(f, false));
+        f.body.append(f.video);
+      })
+      .catch(e => { toast(e.message); setPlayIcon(f, false); })
+      .finally(() => { f.loading?.remove(); f.loading = null; });
     return;
   }
   if (f.video.paused) { f.video.play(); setPlayIcon(f, true); }

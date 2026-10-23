@@ -149,6 +149,11 @@ button.icon { padding: 4px 8px; }
 .frame.broken .broken-msg { display: flex; }
 .frame.broken .play-btn { display: none; }
 
+.preview-loading {
+  position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%) scale(calc(1 / var(--z))); transform-origin: 50% 100%;
+  padding: 4px 10px; border-radius: 999px; background: rgba(0,0,0,.65); color: #fff; font-size: 12px; white-space: nowrap; pointer-events: none;
+}
+
 .frame.uploading .frame-body { display: grid; place-items: center; background: var(--panel); }
 .upload-msg { font-size: 13px; color: var(--muted); width: 70%; text-align: center; transform: scale(calc(1 / var(--z))); }
 .upload-msg .bar { height: 3px; background: var(--panel-2); border-radius: 2px; margin-top: 6px; overflow: hidden; }

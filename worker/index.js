@@ -162,8 +162,10 @@ async function serveMedia(env, file) {
   const metaText = await env.STORE.get(`media:${file}`, { cacheTtl: 86400 });
   if (!metaText) throw new HttpError(404, 'Media not found');
   const meta = JSON.parse(metaText);
-  // Concatenate the parts as one stream (pure I/O, no copying in JS).
-  const { readable, writable } = new TransformStream();
+  // Concatenate the parts as one stream (pure I/O, no copying in JS). A
+  // FixedLengthStream keeps Content-Length on the response (a plain stream
+  // loses it), so a download cut short fails instead of looking complete.
+  const { readable, writable } = new FixedLengthStream(meta.size);
   (async () => {
     try {
       for (let i = 0; i < meta.parts; i++) {
