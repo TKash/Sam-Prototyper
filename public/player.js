@@ -109,6 +109,7 @@ async function main() {
   hideLoadingTitle();
   startClip = first;
   helpContent = canvasHelp();
+  screenKey = () => current;
   show(first);
   bindInput();
 }
@@ -561,6 +562,7 @@ function toggleHelp(open = !helpBox) {
     return;
   }
   if (!helpContent) return;
+  hideNudge();
   helpBox = hEl('aside', 'help');
   helpBox.setAttribute('role', 'dialog');
   helpBox.setAttribute('aria-label', 'Help');
@@ -577,19 +579,65 @@ function renderHelp() {
   helpKey = key;
   const controls = [
     [[kbd('H')], 'Show or hide this help'],
-    [[kbd('R')], project.mode !== 'timeline' && clips?.has(project.restartClip) ? `Restart from ${clips.get(project.restartClip).name}` : 'Restart from the beginning'],
+    [[kbd('R')], restartText()],
     toMenu ? [[kbd('M')], 'Back to the menu of prototypes'] : null,
     toSibling ? [[kbd('P'), kbd('N')], 'Previous or next prototype'] : null,
     [['Double-click'], 'Full screen on or off'],
   ].filter(Boolean);
-  const rows = list => hEl('dl', 'help-rows', list.map(([keys, what]) => [hEl('dt', '', keys), hEl('dd', '', what)]));
   helpBox.replaceChildren(
     hEl('header', 'help-head', hEl('h2', '', c.title), hEl('span', 'help-close', kbd('H'), ' or ', kbd('Esc'), ' to close')),
     hEl('section', '', hEl('h3', '', c.aboutTitle || 'About this prototype'), c.about),
     hEl('section', '', hEl('h3', '', 'On this screen'),
-      c.here.length ? rows(c.here.map(([keys, what]) => [keys.map(k => (typeof k === 'string' && k.startsWith('key:') ? kbd(k.slice(4)) : k)), what])) : hEl('p', 'help-muted', 'Nothing to press here. This screen just plays.')),
+      hereRows(c.here)),
     hEl('section', '', hEl('h3', '', 'Controls'), rows(controls)),
   );
+}
+
+const restartText = () => (project.mode !== 'timeline' && clips?.has(project.restartClip) ? `Restart from ${clips.get(project.restartClip).name}` : 'Restart from the beginning');
+const rows = list => hEl('dl', 'help-rows', list.map(([keys, what]) => [hEl('dt', '', keys), hEl('dd', '', what)]));
+const hereRows = here => (here.length
+  ? rows(here.map(([keys, what]) => [keys.map(k => (typeof k === 'string' && k.startsWith('key:') ? kbd(k.slice(4)) : k)), what]))
+  : hEl('p', 'help-muted', 'Nothing to press here. This screen just plays.'));
+
+// ---------------------------------------------------------------- nudge
+//
+// Pressing keys that do nothing here (3 in a row on the same screen) brings up
+// a small box with what does work, so nobody is left stuck. It goes on the
+// next press that does something, or after a few seconds.
+
+const NUDGE_AFTER = 3;
+let deadPresses = 0, deadScreen = null, nudgeBox = null, nudgeTimer = null;
+let screenKey = () => null; // set by the canvas / single-video player
+const IGNORED = /^(Shift|Control|Alt|Meta|CapsLock|Tab|Escape|F\d+|ContextMenu|Unidentified)/;
+
+function noteKey(e, handled) {
+  if (handled) { deadPresses = 0; hideNudge(); return; }
+  if (IGNORED.test(e.key || '') || e.ctrlKey || e.metaKey || e.altKey || !helpContent || helpBox) return;
+  const here = screenKey();
+  if (here !== deadScreen) { deadScreen = here; deadPresses = 0; }
+  if (++deadPresses >= NUDGE_AFTER) { deadPresses = 0; showNudge(); }
+}
+
+function showNudge() {
+  hideNudge();
+  const c = helpContent();
+  // At the end of a flow there's nothing to press, so offer the way out instead.
+  const ways = c.here.length ? hereRows(c.here) : [
+    hEl('p', 'help-muted', 'Nothing else to press on this screen.'),
+    rows([[[kbd('R')], restartText()], toMenu ? [[kbd('M')], 'Back to the menu of prototypes'] : null].filter(Boolean)),
+  ];
+  nudgeBox = hEl('aside', 'help nudge',
+    hEl('header', 'help-head', hEl('h2', '', 'Try one of these'), hEl('span', 'help-close', kbd('H'), ' for all help')),
+    ways);
+  nudgeBox.setAttribute('role', 'status');
+  document.body.append(nudgeBox);
+  nudgeTimer = setTimeout(hideNudge, 7000);
+}
+
+function hideNudge() {
+  clearTimeout(nudgeTimer);
+  nudgeBox?.remove();
+  nudgeBox = null;
 }
 
 // Designer text: blank lines separate paragraphs.
@@ -661,10 +709,12 @@ function bindInput() {
     if (own || global) {
       e.preventDefault();
       follow(own || global);
+      noteKey(e, true);
     } else if (back) {
       e.preventDefault();
       startReverse(back);
-    } else builtInKey(e, restartPrototype);
+      noteKey(e, true);
+    } else noteKey(e, builtInKey(e, restartPrototype));
   });
   window.addEventListener('pointerdown', e => {
     if (e.button !== 0) return;
@@ -914,13 +964,15 @@ async function runTimeline() {
     return { title: project.name || 'Prototype', aboutTitle: project.help ? 'About this prototype' : 'Stops', aboutKey: [at, mode, project.help], about, here };
   };
 
+  screenKey = () => `${frame}`;
+
   const continueCode = () => stopKey.get(frame) || keys.next?.code;
   window.addEventListener('keydown', e => {
     if (e.repeat) return;
     unlockTimelineSound();
-    if (e.code === continueCode()) { e.preventDefault(); goForward(); }
-    else if (R && e.code === keys.back.code) { e.preventDefault(); goBack(); }
-    else builtInKey(e, restart);
+    if (e.code === continueCode()) { e.preventDefault(); goForward(); noteKey(e, true); }
+    else if (R && e.code === keys.back.code) { e.preventDefault(); goBack(); noteKey(e, true); }
+    else noteKey(e, builtInKey(e, restart));
   });
   window.addEventListener('pointerdown', e => {
     if (e.button !== 0) return;

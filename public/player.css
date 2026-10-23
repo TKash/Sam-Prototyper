@@ -75,3 +75,13 @@ body.idle { cursor: none; }
 #loading-title.done { opacity: 0; }
 @keyframes loading-title-in { from { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { #loading-title { animation: none; transition: none; } }
+
+/* Nudge: a smaller help box at the bottom after a few presses that do nothing. */
+.help.nudge {
+  top: auto; bottom: 28px; transform: translateX(-50%);
+  width: min(440px, calc(100vw - 32px)); padding: 16px 20px 14px;
+  animation: nudge-in .2s ease-out;
+}
+.help.nudge h2 { font-size: 15px; }
+@keyframes nudge-in { from { opacity: 0; transform: translate(-50%, 8px); } }
+@media (prefers-reduced-motion: reduce) { .help.nudge { animation: none; } }

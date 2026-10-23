@@ -280,6 +280,7 @@ async function listProjects() {
       id: p.id, name: p.name, mode: p.mode || 'canvas', clips: p.clips.length, stops: p.stops?.length || 0, hasVideo: Boolean(p.video),
       cover: p.cover?.file || null, gallery: p.gallery !== false, updatedAt: p.updatedAt,
       galleryOrder: Number.isFinite(p.galleryOrder) ? p.galleryOrder : null,
+      summary: String(p.summary || '').slice(0, 300) || null,
     };
   }));
   return list.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
@@ -291,7 +292,7 @@ const galleryList = list => list
   .filter(p => p.gallery !== false && (p.mode === 'timeline' ? p.hasVideo : p.clips > 0))
   .sort((a, b) => (a.galleryOrder ?? Infinity) - (b.galleryOrder ?? Infinity)
     || (a.name || '').localeCompare(b.name || '', undefined, { numeric: true, sensitivity: 'base' }))
-  .map(({ id, name, mode, clips, stops, cover }) => ({ id, name, mode, clips, stops, cover }));
+  .map(({ id, name, mode, clips, stops, cover, summary }) => ({ id, name, mode, clips, stops, cover, summary }));
 
 async function route(req, res, url) {
   const parts = url.pathname.split('/').filter(Boolean);

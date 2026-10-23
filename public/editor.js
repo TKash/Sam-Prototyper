@@ -1747,6 +1747,7 @@ function renderInspector() {
       h('label', { class: 'row' },
         h('input', { type: 'checkbox', checked: !!p.sound, onchange: e => commit(() => { p.sound = e.target.checked; }) }),
         'Play audio (starts after the first key press)'),
+      helpField(p, 'summary', 'Gallery description', 'Shown under the name on this prototype\u2019s card in the client gallery (up to three lines).', 'What this prototype shows, in a sentence…', 300),
       helpField(p, 'help', 'Help text', 'Shown when viewers press H, with the keys that work on each screen. Leave empty to show a map of all the screens instead.', 'What this prototype shows and how to move around in it…'),
     ));
     sections.push(globalTriggersSection());
@@ -1758,10 +1759,10 @@ function renderInspector() {
 }
 
 // Free text shown in the player's help panel (H). Empty removes the field.
-function helpField(obj, key, label, hint, placeholder) {
+function helpField(obj, key, label, hint, placeholder, maxLength) {
   return h('label', { class: 'field' }, h('span', {}, label),
     h('textarea', {
-      rows: 4, placeholder,
+      rows: maxLength ? 2 : 4, placeholder, maxLength,
       onfocus: () => snapshot(),
       oninput: e => { const v = e.target.value; if (v.trim()) obj[key] = v; else delete obj[key]; save(); },
     }, obj[key] || ''),

@@ -71,6 +71,8 @@ async function saveProject(env, p) {
     clips: p.clips?.length || 0, stops: p.stops?.length || 0, hasVideo: Boolean(p.video), updatedAt: p.updatedAt,
     cover: p.cover?.file || null, gallery: p.gallery !== false,
     galleryOrder: Number.isFinite(p.galleryOrder) ? p.galleryOrder : null,
+    // KV list metadata is capped at 1 KB, so the card description is trimmed.
+    summary: String(p.summary || '').slice(0, 300) || null,
   };
   await env.STORE.put(`project:${p.id}`, JSON.stringify(p), { metadata });
   return p;
@@ -94,7 +96,7 @@ const galleryList = list => list
   .filter(p => p.gallery !== false && (p.mode === 'timeline' ? p.hasVideo : p.clips > 0))
   .sort((a, b) => (a.galleryOrder ?? Infinity) - (b.galleryOrder ?? Infinity)
     || (a.name || '').localeCompare(b.name || '', undefined, { numeric: true, sensitivity: 'base' }))
-  .map(({ id, name, mode, clips, stops, cover }) => ({ id, name, mode, clips, stops, cover: cover || null }));
+  .map(({ id, name, mode, clips, stops, cover, summary }) => ({ id, name, mode, clips, stops, cover: cover || null, summary: summary || null }));
 
 function newProject(body) {
   const p = { id: newId(), name: String(body.name || 'Untitled prototype').slice(0, 120), startClip: null, fit: 'contain', sound: false, clips: [], globalTriggers: [] };

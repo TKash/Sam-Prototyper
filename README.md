@@ -26,6 +26,8 @@ Open http://localhost:5180 (set `PORT` to change it). Needs Node 18+. Nothing to
 
 ## Player
 
+If someone presses 3 keys in a row that do nothing on the current screen, a small **Try one of these** box shows what does work there (or R / M at the end of a flow).
+
 Press **H** for help: a see-through panel over the running prototype with the prototype's help text (or, without one, a map of every screen and where its keys lead, or the list of stops), the keys and actions that work on the current screen, and the general controls (H, R, M, double-click). It follows along as you navigate; H or Esc closes it. Write the help text in the Prototype panel (or the single-video panel), and an optional **Screen note** per frame.
 
 `/p/<id>` downloads every video, prepares the first frame of each, then starts. Switching clips happens within a frame, with no flash or load. Double-click toggles full screen.
