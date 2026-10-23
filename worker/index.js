@@ -70,6 +70,7 @@ async function saveProject(env, p) {
     name: String(p.name || '').slice(0, 200), mode: p.mode || 'canvas',
     clips: p.clips?.length || 0, stops: p.stops?.length || 0, hasVideo: Boolean(p.video), updatedAt: p.updatedAt,
     cover: p.cover?.file || null, gallery: p.gallery !== false,
+    galleryOrder: Number.isFinite(p.galleryOrder) ? p.galleryOrder : null,
   };
   await env.STORE.put(`project:${p.id}`, JSON.stringify(p), { metadata });
   return p;
@@ -87,11 +88,13 @@ async function listProjects(env) {
 }
 
 // The client gallery, straight from list metadata: prototypes with something
-// to play, unless hidden from it. Same as server.js.
+// to play, unless hidden from it, in their set order (the editor's Order
+// list), then by name. Same as server.js.
 const galleryList = list => list
   .filter(p => p.gallery !== false && (p.mode === 'timeline' ? p.hasVideo : p.clips > 0))
-  .map(({ id, name, mode, clips, stops, cover }) => ({ id, name, mode, clips, stops, cover: cover || null }))
-  .sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { numeric: true, sensitivity: 'base' }));
+  .sort((a, b) => (a.galleryOrder ?? Infinity) - (b.galleryOrder ?? Infinity)
+    || (a.name || '').localeCompare(b.name || '', undefined, { numeric: true, sensitivity: 'base' }))
+  .map(({ id, name, mode, clips, stops, cover }) => ({ id, name, mode, clips, stops, cover: cover || null }));
 
 function newProject(body) {
   const p = { id: newId(), name: String(body.name || 'Untitled prototype').slice(0, 120), startClip: null, fit: 'contain', sound: false, clips: [], globalTriggers: [] };

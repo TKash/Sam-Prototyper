@@ -302,7 +302,42 @@ function gallerySection() {
       h('button', { class: 'ghost', onclick: () => window.open('/gallery', '_blank') }, 'Open')),
     h('p', { class: 'hint' }, 'Offline file: one .html with the whole gallery and every video inside. Share it on Teams, SharePoint or email; viewers double-click it, no internet needed. ', size),
     h('div', { class: 'row' }, h('button', { onclick: e => buildGalleryFile(e.currentTarget) }, 'Download offline file')),
+    h('strong', { class: 'sub-h' }, 'Order'),
+    galleryOrderList(),
   );
+}
+
+// The gallery's order: ↑ / ↓ move a prototype, and each prototype whose
+// position changed saves its new place (galleryOrder). Prototypes without a
+// place come after the ordered ones, by name.
+function galleryOrderList() {
+  const ol = h('ol', { class: 'gallery-order' });
+  let list = [];
+  const render = () => ol.replaceChildren(...list.map((item, i) => h('li', {},
+    h('span', { class: 'name' }, item.name),
+    h('button', { class: 'ghost icon', title: `Move ${item.name} up`, 'aria-label': `Move ${item.name} up`, disabled: i === 0, onclick: () => move(i, -1) }, '↑'),
+    h('button', { class: 'ghost icon', title: `Move ${item.name} down`, 'aria-label': `Move ${item.name} down`, disabled: i === list.length - 1, onclick: () => move(i, 1) }, '↓'),
+  )));
+  const move = async (i, by) => {
+    [list[i], list[i + by]] = [list[i + by], list[i]];
+    render();
+    ol.classList.add('busy');
+    try {
+      for (let k = 0; k < list.length; k++) await setGalleryOrder(list[k].id, k);
+    } catch (e) {
+      toast(`Couldn't save the order: ${e.message}`);
+    }
+    ol.classList.remove('busy');
+  };
+  api('/api/gallery').then(l => { list = l; render(); }).catch(() => {});
+  return ol;
+}
+
+async function setGalleryOrder(id, n) {
+  const p = await api(`/api/projects/${id}`);
+  if (p.galleryOrder === n) return; // only changed positions are written
+  p.galleryOrder = n;
+  await api(`/api/projects/${id}`, { method: 'PUT', headers: p.updatedAt ? { 'If-Match': p.updatedAt } : {}, body: JSON.stringify(p) });
 }
 
 // The prototypes in the gallery, each with its full project and the media it plays.

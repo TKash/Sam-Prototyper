@@ -279,16 +279,19 @@ async function listProjects() {
     return {
       id: p.id, name: p.name, mode: p.mode || 'canvas', clips: p.clips.length, stops: p.stops?.length || 0, hasVideo: Boolean(p.video),
       cover: p.cover?.file || null, gallery: p.gallery !== false, updatedAt: p.updatedAt,
+      galleryOrder: Number.isFinite(p.galleryOrder) ? p.galleryOrder : null,
     };
   }));
   return list.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
 }
 
-// The client gallery: prototypes with something to play, unless hidden from it.
+// The client gallery: prototypes with something to play, unless hidden from
+// it, in their set order (the editor's Order list), then by name.
 const galleryList = list => list
   .filter(p => p.gallery !== false && (p.mode === 'timeline' ? p.hasVideo : p.clips > 0))
-  .map(({ id, name, mode, clips, stops, cover }) => ({ id, name, mode, clips, stops, cover }))
-  .sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { numeric: true, sensitivity: 'base' }));
+  .sort((a, b) => (a.galleryOrder ?? Infinity) - (b.galleryOrder ?? Infinity)
+    || (a.name || '').localeCompare(b.name || '', undefined, { numeric: true, sensitivity: 'base' }))
+  .map(({ id, name, mode, clips, stops, cover }) => ({ id, name, mode, clips, stops, cover }));
 
 async function route(req, res, url) {
   const parts = url.pathname.split('/').filter(Boolean);
