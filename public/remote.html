@@ -28,7 +28,7 @@
   --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
   color-scheme: dark;
 }
-* { box-sizing: border-box; }
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; } /* no browser tap flash (blue on Android): the buttons' own pressed grey shows instead */
 html, body { height: 100%; }
 body {
   margin: 0; background: var(--bg); color: var(--ink);
