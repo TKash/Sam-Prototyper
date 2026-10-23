@@ -857,22 +857,25 @@ function connectorGeometry() {
       list.push(g);
     }
   }
-  // Spread several connectors leaving/entering the same side so they don't overlap.
-  const spread = (keyFn, setFn, sortFn) => {
-    const groups = new Map();
-    for (const g of list) {
-      const k = keyFn(g);
-      if (!groups.has(k)) groups.set(k, []);
-      groups.get(k).push(g);
-    }
-    for (const arr of groups.values()) {
-      arr.sort(sortFn);
-      arr.forEach((g, i) => setFn(g, (i + 1) / (arr.length + 1)));
-    }
-  };
+  // Spread the connectors meeting each side of a frame — leaving and arriving
+  // alike — so none share a point. Ordered by where their other end is (so
+  // they don't cross), then by connector id: the same order at both ends, so a
+  // two-way pair between the same sides runs as two parallel lines.
   const cross = (side, r) => (side === 'left' || side === 'right' ? r.y + r.h / 2 : r.x + r.w / 2);
-  spread(g => `${g.from.id}|${g.sa}`, (g, f) => (g.fa = f), (m, n) => cross(m.sa, m.b) - cross(n.sa, n.b) || m.t.id.localeCompare(n.t.id));
-  spread(g => `${g.to.id}|${g.sb}`, (g, f) => (g.fb = f), (m, n) => cross(m.sb, m.a) - cross(n.sb, n.a) || m.t.id.localeCompare(n.t.id));
+  const ends = new Map(); // "frameId|side" -> [{ g, end, other }]
+  const addEnd = (frame, side, g, end, other) => {
+    const k = `${frame.id}|${side}`;
+    if (!ends.has(k)) ends.set(k, []);
+    ends.get(k).push({ g, end, side, other });
+  };
+  for (const g of list) {
+    addEnd(g.from, g.sa, g, 'fa', g.b);
+    addEnd(g.to, g.sb, g, 'fb', g.a);
+  }
+  for (const arr of ends.values()) {
+    arr.sort((m, n) => cross(m.side, m.other) - cross(n.side, n.other) || m.g.t.id.localeCompare(n.g.t.id));
+    arr.forEach((e, i) => { e.g[e.end] = (i + 1) / (arr.length + 1); });
+  }
   for (const g of list) {
     g.p1 = pointOn(g.a, g.sa, g.fa);
     g.p2 = pointOn(g.b, g.sb, g.fb);
