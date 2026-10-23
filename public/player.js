@@ -24,9 +24,28 @@ let current = null;
 let soundPending = false;
 
 main().catch(err => {
+  hideLoadingTitle();
   errorBox.textContent = `Couldn't load this prototype.\n${err.message}`;
   errorBox.hidden = false;
 });
+
+// While the videos load: the prototype's name in the middle of the screen,
+// faded out once the first frame is up.
+let loadingTitle = null;
+function showLoadingTitle(name) {
+  if (!name) return;
+  loadingTitle = document.createElement('div');
+  loadingTitle.id = 'loading-title';
+  loadingTitle.textContent = name;
+  document.body.append(loadingTitle);
+}
+function hideLoadingTitle() {
+  const el = loadingTitle;
+  if (!el) return;
+  loadingTitle = null;
+  el.classList.add('done');
+  setTimeout(() => el.remove(), 600);
+}
 
 async function main() {
   if (EMBEDDED) {
@@ -36,6 +55,7 @@ async function main() {
     if (!r.ok) throw new Error(`Project request failed (${r.status})`);
     project = await r.json();
   }
+  showLoadingTitle(project.name);
   if (project.mode === 'timeline') return runTimeline();
   clips = new Map(project.clips.map(c => [c.id, c]));
   if (!clips.size) throw new Error('This prototype has no clips yet.');
@@ -71,6 +91,7 @@ async function main() {
     if (cover.classList.contains('on') && current) paintStill(current);
   });
   stage.classList.add('ready');
+  hideLoadingTitle();
   startClip = first;
   helpContent = canvasHelp();
   show(first);
@@ -855,6 +876,7 @@ async function runTimeline() {
   // Start on frame 0: wait there if it is a stop, otherwise play to the first stop.
   showOnly(F);
   stage.classList.add('ready');
+  hideLoadingTitle();
   if (stops.includes(0)) { F.currentTime = at(0); prepareBack(); }
   else goForward();
 

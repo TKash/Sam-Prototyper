@@ -62,3 +62,16 @@ body.idle { cursor: none; }
   background: rgba(255, 255, 255, .08); color: #fff; font: 600 12px/1 Inter, system-ui, sans-serif;
 }
 @media (max-width: 560px) { .help { padding: 18px 16px 14px; } .help-close { display: none; } }
+
+/* The prototype's name while its videos load. */
+#loading-title {
+  position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 5;
+  max-width: calc(100vw - 32px); text-align: center; pointer-events: none;
+  color: rgba(255, 255, 255, .82); font: 600 clamp(20px, 3.2vw, 34px)/1.25 Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+  letter-spacing: -.01em; -webkit-font-smoothing: antialiased;
+  animation: loading-title-in .5s ease-out both;
+  transition: opacity .45s ease;
+}
+#loading-title.done { opacity: 0; }
+@keyframes loading-title-in { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { #loading-title { animation: none; transition: none; } }
