@@ -541,7 +541,7 @@ function renderHelp() {
   helpKey = key;
   const controls = [
     [[kbd('H')], 'Show or hide this help'],
-    [[kbd('R')], 'Restart from the beginning'],
+    [[kbd('R')], project.mode !== 'timeline' && clips?.has(project.restartClip) ? `Restart from ${clips.get(project.restartClip).name}` : 'Restart from the beginning'],
     toMenu ? [[kbd('M')], 'Back to the menu of prototypes'] : null,
     toSibling ? [[kbd('P'), kbd('N')], 'Previous or next prototype'] : null,
     [['Double-click'], 'Full screen on or off'],
@@ -598,11 +598,14 @@ function canvasHelp() {
   };
 }
 
+// R goes to the prototype's chosen restart frame, or else where it started.
+const restartTarget = () => (clips.has(project.restartClip) ? project.restartClip : startClip);
+
 function restartPrototype() {
-  if (!startClip) return;
+  if (!restartTarget()) return;
   routes.length = 0;
   for (const v of videos.values()) v._onEnd = null;
-  show(startClip);
+  show(restartTarget());
 }
 
 function findTrigger(match) {

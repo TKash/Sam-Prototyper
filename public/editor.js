@@ -1386,6 +1386,7 @@ function deleteClip(c) {
     for (const o of p.clips) o.triggers = o.triggers.filter(t => t.to !== c.id);
     p.globalTriggers = p.globalTriggers.filter(t => t.to !== c.id);
     if (p.startClip === c.id) p.startClip = p.clips[0]?.id || null;
+    if (p.restartClip === c.id) delete p.restartClip;
     state.sel = null;
   });
   toast(`Deleted "${c.name}" — Ctrl+Z to undo`);
@@ -1692,6 +1693,9 @@ function renderInspector() {
       h('h3', {}, 'Prototype'),
       h('label', { class: 'field' }, h('span', {}, 'Starts on'),
         h('select', { onchange: e => commit(() => { p.startClip = e.target.value || null; }) }, clipOptions(p.startClip))),
+      h('label', { class: 'field' }, h('span', {}, 'R restarts from'),
+        h('select', { onchange: e => commit(() => { if (e.target.value) p.restartClip = e.target.value; else delete p.restartClip; }) },
+          clipOptions(p.restartClip, 'The start frame'))),
       h('label', { class: 'field' }, h('span', {}, 'Scaling'),
         h('select', { onchange: e => commit(() => { p.fit = e.target.value; }) },
           h('option', { value: 'contain', selected: p.fit !== 'cover' }, 'Fit (letterbox)'),
