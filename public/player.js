@@ -669,8 +669,14 @@ function canvasHelp() {
     const nameOf = id => clips.get(id)?.name || 'another screen';
     const k = t => `key:${t.label || t.code || '?'}`;
     const actions = [];
+    // A key used both by this screen and by a rewind into it does whichever the
+    // keydown handler picks: the rewind only after arriving through its connector.
+    const arrival = routes[routes.length - 1];
+    const cameVia = arrival?.t.to === here?.id && arrival.t.reverse?.enabled ? arrival.t : null;
+    const ownCodes = new Set((here?.triggers || []).filter(t => t.type === 'key' && clips.has(t.to)).map(t => t.code));
     for (const t of here?.triggers || []) {
       if (!clips.has(t.to)) continue;
+      if (t.type === 'key' && t.code && cameVia?.reverse.code === t.code) continue;
       if (t.type === 'key' && t.code) actions.push([[k(t)], `Go to ${nameOf(t.to)}`]);
       else if (t.type === 'click') actions.push([['Click'], `Go to ${nameOf(t.to)}`]);
       else if (t.type === 'end') actions.push([['Wait'], `${nameOf(t.to)} plays ${t.delay ? `${+(t.delay / 1000).toFixed(2)}s after` : 'when'} this video ends`]);
@@ -678,7 +684,7 @@ function canvasHelp() {
     for (const c of project.clips) {
       for (const t of c.triggers || []) {
         const r = t.reverse;
-        if (t.to === here?.id && r?.enabled && r.file && r.code) actions.push([[`key:${r.label || r.code}`], `Rewind back to ${c.name}`]);
+        if (t.to === here?.id && r?.enabled && r.file && r.code && (!ownCodes.has(r.code) || t === cameVia)) actions.push([[`key:${r.label || r.code}`], `Rewind back to ${c.name}`]);
       }
     }
     for (const t of project.globalTriggers || []) {
@@ -720,9 +726,14 @@ function bindInput() {
     if (e.repeat) return;
     unlockSound();
     const match = t => t.type === 'key' && t.code === e.code && t.to;
-    // Priority: this clip's own forward keys, then back keys into it, then global keys.
-    const own = (clips.get(current)?.triggers || []).find(match);
-    const back = !own && reverseFor(e.code);
+    // Priority: this clip's own forward keys, then back keys into it, then global
+    // keys — except that after arriving through a connector with "reverse with a
+    // key", its back key rewinds even when this clip also uses that key.
+    const arrival = routes[routes.length - 1];
+    const cameBack = arrival?.t.to === current && arrival.t.reverse?.enabled && arrival.t.reverse.code === e.code;
+    const rewind = cameBack ? reverseFor(e.code) : null;
+    const own = !rewind && (clips.get(current)?.triggers || []).find(match);
+    const back = rewind || (!own && reverseFor(e.code));
     const global = !own && !back && (project.globalTriggers || []).find(match);
     if (own || global) {
       e.preventDefault();
