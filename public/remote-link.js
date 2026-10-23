@@ -4,9 +4,9 @@
 //
 // Both sides connect to a free public MQTT relay (HiveMQ) over secure
 // WebSockets, on a channel named after a random pairing code. The phone
-// publishes button names to <channel>/keys; this side turns the ones in
-// KEYS into key presses and publishes "on"/"off" to <channel>/tv so the
-// phone can show it's linked. The code lives in this browser's
+// publishes button names to <channel>/keys and "on"/"off" to <channel>/phone
+// (its presence); this side turns the keys in KEYS into key presses and
+// publishes "on"/"off" to <channel>/tv so the phone can show it's linked. The code lives in this browser's
 // localStorage, so every page of the tool here uses the same one.
 //
 // A classic script (window.ClipRemote): the offline gallery file inlines it.
@@ -116,7 +116,8 @@
       return base + '/remote#' + id;
     },
 
-    // Listen for the phone. onKey([key, code, keyCode], name); onState('up' | 'down').
+    // Listen for the phone. onKey([key, code, keyCode], name); onState('up' | 'down');
+    // onPhone(true | false) when the phone remote page opens or goes away.
     listen: function (opts) {
       var id = opts.id || this.id();
       if (!id) return null;
@@ -124,13 +125,16 @@
       var m = makeMqtt({
         url: BROKER,
         clientId: 'tv-' + Math.random().toString(36).slice(2, 12),
-        subs: [topicOf(id) + '/keys'],
+        subs: [topicOf(id) + '/keys', topicOf(id) + '/phone'],
         will: { topic: tv, msg: 'off' },
         onState: function (s) {
           if (s === 'up') m.publish(tv, 'on', true);
           if (opts.onState) opts.onState(s);
         },
-        onMessage: function (t, msg) { var k = KEYS[msg]; if (k && opts.onKey) opts.onKey(k, msg); },
+        onMessage: function (t, msg) {
+          if (/\/phone$/.test(t)) { if (opts.onPhone) opts.onPhone(msg === 'on'); return; }
+          var k = KEYS[msg]; if (k && opts.onKey) opts.onKey(k, msg);
+        },
       });
       var off = function () { m.publish(tv, 'off', true); };
       window.addEventListener('pagehide', off);

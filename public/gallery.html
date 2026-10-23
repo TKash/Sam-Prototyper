@@ -18,50 +18,12 @@
     html, body { margin: 0; min-height: 100%; }
     body { background: var(--bg); color: var(--text); font: 14px/1.45 Inter, system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
 
-    header { max-width: 1440px; margin: 0 auto; padding: 48px 40px 8px; display: flex; align-items: baseline; gap: 14px; }
+    /* Thumbnails on the left; the phone remote and the controls on the right. */
+    .layout { max-width: 1680px; margin: 0 auto; padding: 44px 40px 56px; display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 40px; align-items: start; }
+    header { display: flex; align-items: baseline; gap: 14px; margin-bottom: 24px; }
     h1 { margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -.01em; }
     .count { color: var(--muted); font-size: 15px; }
-    header .spacer { flex: 1; }
-
-    /* Phone remote: header button + panel */
-    .remote-btn {
-      align-self: center; display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px;
-      background: var(--card); border: 1px solid var(--line); color: var(--text); font: 500 13px Inter, system-ui, sans-serif; cursor: pointer;
-    }
-    .remote-btn:hover { border-color: rgba(255,255,255,.2); }
-    .remote-btn svg { width: 16px; height: 16px; }
-    .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
-    .dot[data-s="waiting"] { background: #e8b04a; }
-    .dot[data-s="linked"] { background: #3ddc84; }
-    .dot[data-s="off"] { display: none; }
-    .remote-panel {
-      position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: 16px;
-      background: rgba(0,0,0,.55); backdrop-filter: blur(6px);
-    }
-    .remote-card {
-      width: min(520px, 100%); max-height: calc(100vh - 32px); overflow: auto; padding: 24px; border-radius: 16px;
-      background: #17171a; border: 1px solid var(--line); box-shadow: 0 24px 60px rgba(0,0,0,.5);
-    }
-    .remote-card h2 { margin: 0 0 4px; font-size: 18px; font-weight: 600; }
-    .remote-card .lede { margin: 0 0 18px; color: var(--muted); font-size: 14px; }
-    .pair-row { display: flex; flex-wrap: wrap; gap: 20px; align-items: center; }
-    .qr { background: #fff; padding: 8px; border-radius: 8px; line-height: 0; width: 168px; flex: none; }
-    .qr svg { width: 100%; height: auto; }
-    .qr .qr-msg { color: #111; font-size: 12px; line-height: 1.4; }
-    .pair-info { display: grid; gap: 8px; min-width: 0; flex: 1; font-size: 14px; color: var(--muted); }
-    .pair-code { font: 500 20px ui-monospace, "JetBrains Mono", Consolas, monospace; letter-spacing: .08em; color: var(--text); }
-    .pair-status { display: flex; align-items: center; gap: 8px; color: var(--text); }
-    .remote-card table { width: 100%; border-collapse: collapse; margin-top: 18px; font-size: 13px; }
-    .remote-card td { padding: 6px 0; border-bottom: 1px solid var(--line); }
-    .remote-card td:last-child { text-align: right; color: var(--muted); }
-    .remote-actions { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; margin-top: 18px; }
-    .linkish { background: none; border: 0; padding: 0; color: var(--muted); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; font: 13px Inter, system-ui, sans-serif; }
-    .linkish:hover { color: var(--text); }
-    .remote-actions .close { margin-left: auto; padding: 8px 16px; border-radius: 8px; border: 0; background: var(--text); color: #111; font: 600 13px Inter, system-ui, sans-serif; cursor: pointer; }
-    .remote-warn { margin: 0 0 16px; padding: 10px 12px; border: 1px solid #ef6a5e; border-radius: 8px; font-size: 13px; }
-
-    main { max-width: 1440px; margin: 0 auto; padding: 24px 40px 120px; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 28px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 24px; }
 
     .card {
       display: block; color: inherit; text-decoration: none; outline: none;
@@ -90,47 +52,94 @@
     .card:hover .play, .card:focus-visible .play { opacity: 1; transform: translate(-50%, -50%) scale(1); }
     .card:focus-visible { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent), 0 16px 40px rgba(0,0,0,.45); }
 
-    .keys {
-      position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%);
-      display: flex; gap: 18px; align-items: center; padding: 10px 18px; border-radius: 999px;
-      background: rgba(26,26,28,.85); border: 1px solid var(--line); backdrop-filter: blur(10px);
-      color: var(--muted); font-size: 13px; white-space: nowrap;
-    }
+    .empty, .error { color: var(--muted); padding: 60px 0; text-align: center; }
+
+    .side { position: sticky; top: 24px; display: grid; gap: 16px; max-height: calc(100vh - 48px); overflow: auto; scrollbar-width: thin; }
+    .box { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; }
+    .box h2 { margin: 0 0 14px; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      font-size: 12px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+    .status { display: inline-flex; align-items: center; gap: 7px; padding: 4px 10px; border-radius: 999px;
+      font-size: 12px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--muted); background: rgba(255,255,255,.06); }
+    .status .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+    .status[data-s="linked"] { color: #3ddc84; background: rgba(61,220,132,.12); }
+    .status[data-s="connecting"] { color: #e8b04a; background: rgba(232,176,74,.12); }
+    .pair { display: grid; grid-template-columns: 116px minmax(0, 1fr); gap: 14px; align-items: center; }
+    .qr { background: #fff; padding: 6px; border-radius: 8px; line-height: 0; aspect-ratio: 1; display: grid; place-items: center; }
+    .qr svg { width: 100%; height: auto; }
+    .qr .qr-msg { color: #111; font-size: 11px; line-height: 1.35; }
+    .pair-info { display: grid; gap: 6px; min-width: 0; }
+    .pair-code { font: 500 18px ui-monospace, "JetBrains Mono", Consolas, monospace; letter-spacing: .08em; }
+    .hint { color: var(--muted); font-size: 12.5px; line-height: 1.4; margin: 0; }
+    .links { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 14px; }
+    .linkish { background: none; border: 0; padding: 0; color: var(--muted); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; font: 12.5px Inter, system-ui, sans-serif; }
+    .linkish:hover { color: var(--text); }
+    .warn { margin: 0 0 14px; padding: 9px 11px; border: 1px solid #ef6a5e; border-radius: 8px; font-size: 12.5px; }
+    .controls { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .controls td { padding: 6px 0; border-top: 1px solid var(--line); vertical-align: middle; line-height: 1.35; }
+    .controls tr:first-child td { border-top: 0; padding-top: 0; }
+    .controls td:first-child { width: 108px; white-space: nowrap; }
+    .controls .remote { display: block; color: var(--muted); font-size: 11.5px; margin-top: 1px; }
     kbd {
-      display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 6px; margin-right: 6px;
+      display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 6px; margin-right: 3px;
       border-radius: 5px; border: 1px solid rgba(255,255,255,.18); border-bottom-width: 2px;
       color: var(--text); font: 600 12px/1 Inter, system-ui, sans-serif;
     }
-    .empty, .error { color: var(--muted); padding: 60px 0; text-align: center; }
 
     .player-frame { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; background: #000; z-index: 10; }
     body.playing { overflow: hidden; }
-    body.playing .keys { display: none; }
 
+    @media (max-width: 1000px) {
+      .layout { grid-template-columns: 1fr; }
+      .side { position: static; max-height: none; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); align-items: start; }
+    }
     @media (max-width: 720px) {
-      header { padding: 32px 16px 4px; }
-      main { padding: 16px 16px 100px; }
+      .layout { padding: 32px 16px 40px; gap: 24px; }
       .grid { grid-template-columns: 1fr; gap: 18px; }
-      .keys { gap: 12px; font-size: 12px; }
-      .keys .wide { display: none; }
     }
     @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
   </style>
 </head>
 <body>
-  <header>
-    <h1>Prototypes</h1><span class="count" id="count"></span><span class="spacer"></span>
-    <button class="remote-btn" id="remoteBtn" type="button" aria-haspopup="dialog">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2.5" width="10" height="19" rx="3"/><circle cx="12" cy="9" r="2.2"/><path d="M10 15h.01M14 15h.01M10 18h.01M14 18h.01"/></svg>
-      Phone remote <i class="dot" id="remoteDot" data-s="off"></i>
-    </button>
-  </header>
-  <main><div class="grid" id="grid"></div></main>
-  <div class="keys">
-    <span class="wide"><kbd>←</kbd><kbd>→</kbd>choose</span>
-    <span><kbd>R</kbd>restart a prototype</span>
-    <span><kbd>M</kbd>back to this menu</span>
-    <span class="wide"><kbd>P</kbd><kbd>N</kbd>previous / next prototype</span>
+  <div class="layout">
+    <main>
+      <header><h1>Prototypes</h1><span class="count" id="count"></span></header>
+      <div class="grid" id="grid"></div>
+    </main>
+
+    <aside class="side">
+      <section class="box" aria-labelledby="remoteTitle">
+        <h2><span id="remoteTitle">Phone remote</span>
+          <span class="status" id="remoteStatus" data-s="connecting" role="status"><i class="dot"></i><span>Connecting…</span></span></h2>
+        <p class="warn" id="remoteWarn" hidden>This page is on localhost, which the phone can’t reach. Use the hosted gallery for the remote.</p>
+        <div class="pair">
+          <div class="qr" id="qr" aria-label="QR code for the phone remote"></div>
+          <div class="pair-info">
+            <p class="hint">Scan with your phone’s camera. Pairing code:</p>
+            <div class="pair-code" id="pairCode"></div>
+            <p class="hint">Add it to the phone’s home screen for a full-screen remote.</p>
+          </div>
+        </div>
+        <div class="links">
+          <button class="linkish" id="newCode" type="button">New code</button>
+          <a class="linkish" id="openRemote" target="_blank" rel="noopener">Open the remote here</a>
+        </div>
+      </section>
+
+      <section class="box" aria-labelledby="controlsTitle">
+        <h2 id="controlsTitle">Controls</h2>
+        <table class="controls"><tbody>
+          <tr><td><kbd>←</kbd><kbd>→</kbd><kbd>↑</kbd><kbd>↓</kbd></td><td>Choose a prototype, move around a screen<span class="remote">Remote: D-pad</span></td></tr>
+          <tr><td><kbd>Enter</kbd></td><td>Open a prototype, select<span class="remote">Remote: OK</span></td></tr>
+          <tr><td><kbd>Backspace</kbd></td><td>Go back<span class="remote">Remote: Back</span></td></tr>
+          <tr><td><kbd>R</kbd></td><td>Restart the prototype<span class="remote">Remote: Home</span></td></tr>
+          <tr><td><kbd>M</kbd></td><td>Back to this gallery<span class="remote">Remote: Main Menu</span></td></tr>
+          <tr><td><kbd>P</kbd><kbd>N</kbd></td><td>Previous / next prototype<span class="remote">Remote: Prev / Next Proto</span></td></tr>
+          <tr><td><kbd>H</kbd></td><td>Help: what works on this screen<span class="remote">Remote: Help</span></td></tr>
+          <tr><td><kbd>V</kbd></td><td>Voice assistant, where there is one<span class="remote">Remote: Voice</span></td></tr>
+          <tr><td>Double-click</td><td>Full screen on or off</td></tr>
+        </tbody></table>
+      </section>
+    </aside>
   </div>
   <!--cp-offline-data-->
   <script src="/remote-link.js" data-cp-inline="remote-link.js"></script>
@@ -276,35 +285,42 @@
 
     // ---- phone remote (remote-link.js)
     //
-    // "Phone remote" pairs this browser with a phone: the panel shows a QR code
-    // for /remote#<code>. The gallery then follows the phone (arrows choose, OK
-    // opens), and every prototype opened in this browser connects on its own.
-    // In the offline file, keys for an open prototype are passed into its frame.
+    // Always on: a pairing code is made on the first visit and kept in this
+    // browser, and the panel on the right shows its QR code. The gallery follows
+    // the phone (arrows choose, OK opens) and every prototype opened in this
+    // browser connects on its own. In the offline file, keys for an open
+    // prototype are passed into its frame. The phone remote page announces
+    // itself, so the status shows Linked / Not linked.
     const R = window.ClipRemote;
-    const dot = document.getElementById('remoteDot');
-    // This side only knows the phone is there once a button arrives, so:
-    // connecting (relay not reached) → ready (reached) → linked (a press came in).
-    let link = null, linkState = 'off', heardPhone = false;
-    const setState = s => { linkState = s; dot.dataset.s = s === 'linked' ? 'linked' : s === 'off' ? 'off' : 'waiting'; const st = document.querySelector('.pair-status'); if (st) paintStatus(st); };
-    const paintStatus = node => { const d = el('i', 'dot'); d.dataset.s = dot.dataset.s; node.replaceChildren(d, statusText()); };
-    const statusText = () => ({ off: 'Off', connecting: 'Connecting…', ready: 'Ready: press any button on the phone', linked: 'Phone linked' }[linkState]);
+    const statusEl = document.getElementById('remoteStatus');
+    let link = null, relayUp = false, phoneOn = false;
 
-    function startLink() {
+    function paintStatus() {
+      const s = !R ? 'unavailable' : !relayUp ? 'connecting' : phoneOn ? 'linked' : 'unlinked';
+      statusEl.dataset.s = s;
+      statusEl.lastElementChild.textContent = { connecting: 'Connecting…', linked: 'Linked', unlinked: 'Not linked', unavailable: 'Unavailable' }[s];
+    }
+
+    function onRemoteKey(k, name) {
+      const frame = document.querySelector('.player-frame');
+      if (frame) return R.press(k, frame.contentWindow); // offline file: the open prototype
+      if (name === 'OK') {
+        const card = document.activeElement?.closest?.('.card') || grid.querySelector('.card');
+        card?.focus(); card?.click();
+      } else if (/^(UP|DOWN|LEFT|RIGHT)$/.test(name)) {
+        if (!document.activeElement?.closest?.('.card')) grid.querySelector('.card')?.focus();
+        else R.press(k);
+      }
+    }
+
+    function startLink(id) {
       link?.stop();
-      heardPhone = false;
-      setState('connecting');
+      relayUp = false; phoneOn = false; paintStatus();
       link = R.listen({
-        onState: s => setState(s !== 'up' ? 'connecting' : heardPhone ? 'linked' : 'ready'),
-        onKey: (k, name) => {
-          if (!heardPhone) { heardPhone = true; setState('linked'); }
-          closePanel();
-          const frame = document.querySelector('.player-frame');
-          if (frame) return R.press(k, frame.contentWindow); // offline file: the open prototype
-          if (name === 'OK') {
-            const card = document.activeElement?.closest?.('.card') || grid.querySelector('.card');
-            card?.focus(); card?.click();
-          } else if (/^(UP|DOWN|LEFT|RIGHT)$/.test(name)) R.press(k);
-        },
+        id,
+        onState: s => { relayUp = s === 'up'; if (!relayUp) phoneOn = false; paintStatus(); },
+        onPhone: on => { phoneOn = on; paintStatus(); },
+        onKey: (k, name) => { if (!phoneOn) { phoneOn = true; paintStatus(); } onRemoteKey(k, name); },
       });
     }
 
@@ -316,61 +332,24 @@
       document.head.append(s);
     }));
 
-    let focusBefore = null;
-    function openPanel() {
-      closePanel();
-      focusBefore = document.activeElement?.closest?.('.card') || null;
-      const id = R.id() || R.newId();
-      if (!link) startLink();
+    function showPairing(id) {
       const url = R.remoteUrl(id);
-      const local = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname) || (location.protocol === 'file:' && !window.CLIP_PROTO_ORIGIN);
-      const panel = el('div', 'remote-panel');
-      panel.setAttribute('role', 'dialog');
-      panel.setAttribute('aria-label', 'Phone remote');
-      const qr = el('div', 'qr');
-      const status = el('div', 'pair-status'); paintStatus(status);
-      const keys = [['D-pad', 'Move (arrow keys)'], ['OK', 'Open / select (Enter)'], ['Back', 'Back (Backspace)'], ['Home', 'Restart the prototype (R)'], ['Main Menu', 'Back to this gallery (M)'], ['Help', 'Show the help (H)'], ['Voice', 'Voice assistant (V)'], ['Prev / Next Proto', 'Previous / next prototype (P / N)']];
-      const table = el('table'); const tb = el('tbody');
-      for (const [a, b] of keys) { const tr = el('tr'); tr.append(el('td', '', a), el('td', '', b)); tb.append(tr); }
-      table.append(tb);
-      const card = el('div', 'remote-card');
-      const actions = el('div', 'remote-actions');
-      const newCode = el('button', 'linkish', 'New code');
-      const turnOff = el('button', 'linkish', 'Turn off');
-      const openHere = el('a', 'linkish', 'Open the remote here'); openHere.href = url; openHere.target = '_blank'; openHere.rel = 'noopener';
-      const done = el('button', 'close', 'Done');
-      newCode.onclick = () => { R.newId(); startLink(); openPanel(); };
-      turnOff.onclick = () => { link?.stop(); link = null; R.off(); setState('off'); closePanel(); };
-      done.onclick = closePanel;
-      actions.append(newCode, turnOff, openHere, done);
-      const info = el('div', 'pair-info');
-      info.append(el('div', '', 'Scan with your phone’s camera. Pairing code:'), el('div', 'pair-code', id.replace(/(.{4})/g, '$1 ').trim()), status,
-        el('div', '', 'Tip: Add to Home Screen on the phone for a full-screen remote.'));
-      const row = el('div', 'pair-row'); row.append(qr, info);
-      card.append(...[el('h2', '', 'Phone remote'),
-        el('p', 'lede', 'Use your phone as a TV remote. The gallery and every prototype you open in this browser follow it.'),
-        local && el('p', 'remote-warn', 'This page is on localhost, which the phone can’t reach. Use the hosted gallery for the remote.'),
-        row, table, actions].filter(Boolean));
-      panel.append(card);
-      panel.addEventListener('click', e => { if (e.target === panel) closePanel(); });
-      document.body.append(panel);
-      done.focus();
+      document.getElementById('pairCode').textContent = id.replace(/(.{4})/g, '$1 ').trim();
+      document.getElementById('openRemote').href = url;
+      const qr = document.getElementById('qr');
       loadQr().then(lib => {
         const q = lib(0, 'M'); q.addData(url); q.make();
         qr.innerHTML = q.createSvgTag({ cellSize: 4, margin: 0, scalable: true });
-      }).catch(() => { qr.replaceChildren(el('div', 'qr-msg', `Couldn’t make the QR code. On the phone, open ${url}`)); });
+      }).catch(() => qr.replaceChildren(el('div', 'qr-msg', `No QR code (offline?). On the phone, open ${url}`)));
     }
 
-    function closePanel() {
-      const panel = document.querySelector('.remote-panel');
-      if (!panel) return;
-      panel.remove();
-      (focusBefore || grid.querySelector('.card'))?.focus(); // back to where you were
-    }
-
-    document.getElementById('remoteBtn').onclick = openPanel;
-    addEventListener('keydown', e => { if (e.key === 'Escape') closePanel(); });
-    if (R?.id()) startLink(); // already paired in this browser
+    if (R) {
+      const id = R.id() || R.newId();
+      showPairing(id);
+      startLink(id);
+      document.getElementById('remoteWarn').hidden = !(/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname) || (location.protocol === 'file:' && !window.CLIP_PROTO_ORIGIN));
+      document.getElementById('newCode').onclick = () => { const next = R.newId(); showPairing(next); startLink(next); };
+    } else paintStatus();
   </script>
   <!--cp-offline-media-->
 </body>

@@ -157,15 +157,23 @@ function startRemote(id) {
     statusText.textContent = s === 'linked' ? 'Linked' :
       s === 'waiting' ? 'Waiting for prototype' : 'Connecting';
   }
+  // Presence: the gallery shows "Linked" while this page is open and in view.
+  // The relay publishes "off" for us (the will) if the connection drops.
+  var presence = topic + '/phone';
   var m = ClipRemote.makeMqtt({
     url: ClipRemote.BROKER,
     clientId: 'rc-' + Math.random().toString(36).slice(2, 12),
     subs: [topic + '/tv'],
-    onState: function (s) { relayUp = s === 'up'; paint(); },
+    will: { topic: presence, msg: 'off' },
+    onState: function (s) { relayUp = s === 'up'; if (relayUp && !document.hidden) m.publish(presence, 'on', true); paint(); },
     onMessage: function (t, msg) { tvOn = msg === 'on'; paint(); }
   });
   paint();
-  document.addEventListener('visibilitychange', function () { if (!document.hidden) m.wake(); });
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) { m.publish(presence, 'off', true); return; }
+    m.wake(); m.publish(presence, 'on', true);
+  });
+  window.addEventListener('pagehide', function () { m.publish(presence, 'off', true); });
 
   function send(k) {
     if (m.publish(topic + '/keys', k) && navigator.vibrate) navigator.vibrate(8);
