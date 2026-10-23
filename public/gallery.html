@@ -86,6 +86,7 @@
     <span class="wide"><kbd>←</kbd><kbd>→</kbd>choose</span>
     <span><kbd>R</kbd>restart a prototype</span>
     <span><kbd>M</kbd>back to this menu</span>
+    <span class="wide"><kbd>P</kbd><kbd>N</kbd>previous / next prototype</span>
   </div>
   <!--cp-offline-data-->
   <script>
@@ -103,7 +104,10 @@
       ? Promise.resolve(JSON.parse(OFFLINE.textContent))
       : fetch('/api/gallery').then(r => (r.ok ? r.json() : Promise.reject(new Error(r.status))));
 
+    let order = []; // prototype ids in gallery order, for N / P in the player
     load.then(list => {
+      order = list.map(p => p.id);
+      try { sessionStorage.setItem('cp-gallery', JSON.stringify(order)); } catch {}
       document.getElementById('count').textContent = list.length ? `${list.length} prototype${list.length === 1 ? '' : 's'}` : '';
       if (!list.length) return grid.replaceWith(el('p', 'empty', 'No prototypes yet.'));
       for (const p of list) {
@@ -191,10 +195,19 @@
         return blobs.get(file);
       },
       close: closePrototype,
+      // N / P in the player: the next or previous prototype, wrapping round.
+      step(by) {
+        const i = order.indexOf(openId);
+        const next = order[((i < 0 ? (by > 0 ? -1 : 0) : i) + by + order.length) % order.length];
+        if (next) { sessionStorageSet(next); openPrototype(next); }
+      },
     };
 
+    let openId = null;
     function openPrototype(id) {
       closePrototype();
+      openId = id;
+      sessionStorageSet(id);
       const proj = document.querySelector(`script[data-cp-proj="${CSS.escape(id)}"]`);
       const player = JSON.parse(document.getElementById('cp-player').textContent);
       const frame = el('iframe', 'player-frame');

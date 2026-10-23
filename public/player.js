@@ -460,16 +460,37 @@ function unlockSound() {
 }
 
 // Built-in keys, used only when the prototype doesn't use the key itself:
-// R restarts; M returns to the client gallery when opened from it (?menu, or
-// the offline gallery file).
+// R restarts; M returns to the client gallery and N / P move to the next or
+// previous prototype in it, when opened from it (?menu, or the offline
+// gallery file).
 let startClip = null;
 const MENU_URL = new URLSearchParams(location.search).has('menu') ? '/gallery' : null;
 const toMenu = GALLERY ? () => GALLERY.close() : MENU_URL ? () => { location.href = MENU_URL; } : null;
+
+// N / P: the next or previous prototype in the gallery, wrapping round. Only
+// when opened from the gallery, like M. Online, the gallery page leaves its
+// order in sessionStorage (so a key press doesn't cost a server request);
+// it's fetched only if that's missing.
+const toSibling = GALLERY ? by => GALLERY.step(by) : MENU_URL ? async by => {
+  const id = served?.[1];
+  let order = null;
+  try { order = JSON.parse(sessionStorage.getItem('cp-gallery')); } catch {}
+  if (!Array.isArray(order) || !order.includes(id)) {
+    order = await fetch('/api/gallery').then(r => (r.ok ? r.json() : [])).then(list => list.map(p => p.id)).catch(() => []);
+    try { sessionStorage.setItem('cp-gallery', JSON.stringify(order)); } catch {}
+  }
+  if (!order.length) return;
+  const i = order.indexOf(id);
+  const next = order[((i < 0 ? (by > 0 ? -1 : 0) : i) + by + order.length) % order.length];
+  try { sessionStorage.setItem('cp-last', next); } catch {} // M then returns to this card
+  location.href = `/p/${encodeURIComponent(next)}?menu`;
+} : null;
 
 function builtInKey(e, restart) {
   if (e.ctrlKey || e.metaKey || e.altKey) return false;
   if (e.code === 'KeyR') { e.preventDefault(); restart(); return true; }
   if (e.code === 'KeyM' && toMenu) { e.preventDefault(); toMenu(); return true; }
+  if ((e.code === 'KeyN' || e.code === 'KeyP') && toSibling) { e.preventDefault(); toSibling(e.code === 'KeyN' ? 1 : -1); return true; }
   if (e.code === 'KeyH') { e.preventDefault(); toggleHelp(); return true; }
   if (e.code === 'Escape' && helpBox) { e.preventDefault(); toggleHelp(false); return true; }
   return false;
@@ -522,6 +543,7 @@ function renderHelp() {
     [[kbd('H')], 'Show or hide this help'],
     [[kbd('R')], 'Restart from the beginning'],
     toMenu ? [[kbd('M')], 'Back to the menu of prototypes'] : null,
+    toSibling ? [[kbd('P'), kbd('N')], 'Previous or next prototype'] : null,
     [['Double-click'], 'Full screen on or off'],
   ].filter(Boolean);
   const rows = list => hEl('dl', 'help-rows', list.map(([keys, what]) => [hEl('dt', '', keys), hEl('dd', '', what)]));
