@@ -27,13 +27,15 @@ const MIME = {
   '.json': 'application/json; charset=utf-8',
   '.svg': 'image/svg+xml',
   '.jpg': 'image/jpeg',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
   '.mp4': 'video/mp4',
   '.m4v': 'video/mp4',
   '.mov': 'video/quicktime',
   '.webm': 'video/webm',
 };
 const VIDEO_EXT = new Set(['.mp4', '.m4v', '.mov', '.webm']);
-const UPLOAD_EXT = new Set([...VIDEO_EXT, '.jpg']); // .jpg: prototype covers for the gallery
+const UPLOAD_EXT = new Set([...VIDEO_EXT, '.jpg', '.png', '.webp']); // images: gallery covers, and the originals of image frames
 const PLAYER_FILES = ['player.html', 'player.js', 'player.css'];
 
 class HttpError extends Error {
@@ -78,7 +80,7 @@ async function saveProject(p) {
 async function receiveUpload(req) {
   const name = decodeURIComponent(req.headers['x-filename'] || 'clip.mp4');
   const ext = path.extname(name).toLowerCase();
-  if (!UPLOAD_EXT.has(ext)) throw new HttpError(415, 'Only .mp4, .m4v, .mov or .webm files');
+  if (!UPLOAD_EXT.has(ext)) throw new HttpError(415, 'Only videos (.mp4, .m4v, .mov, .webm) or images (.png, .jpg, .webp)');
   const tmp = path.join(MEDIA, `upload-${newId()}.part`);
   const hash = crypto.createHash('sha1');
   const out = fs.createWriteStream(tmp);

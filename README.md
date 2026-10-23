@@ -22,6 +22,7 @@ Open http://localhost:5180 (set `PORT` to change it). Needs Node 18+. Nothing to
 - Animation: **Instant** or **Dissolve** (50–3000 ms).
 - **Reverse with a key**: press a key on the target clip to rewind back to where you came from. The player remembers the route you actually took, so back keys retrace that path.
 - Undo/redo, and **Play from here** on any clip (opens the player with `?start=<clipId>`).
+- **Image frames:** drop a PNG (or JPG / WebP) to add a static screen. The editor turns it into a 1-second still video (H.264, near-lossless) in your browser, holds it on screen, and keeps the original image too. Transparent areas become black. Any frame's panel has **Download video**, plus **Download image** for image frames.
 - **Fix video** (in a frame's panel): re-encodes the frame's video as standard H.264 without sound, in your browser, and swaps it in. Frames the browser can't play (for example MPEG-4 Part 2 exports) are marked "Can't play this video". It uses ffmpeg compiled to WebAssembly, loaded from jsDelivr (about 32 MB the first time).
 
 ## Player

@@ -2,6 +2,7 @@
 //
 // fix:     re-encode a video the browser can't play (e.g. MPEG-4 Part 2
 //          "mp4v" exports) as plain H.264. ffmpeg brings its own decoders.
+// still:   turn an image into a short still video, so it can be a frame.
 // reverse: make the reversed copy used by rewinds — every frame exactly, in
 //          reverse order, at the source's own frame rate (see reverse()).
 //
@@ -52,6 +53,19 @@ function take(name) {
 }
 
 const progress = pct => postMessage({ type: 'progress', pct });
+
+// An image as a 1 s, 30 fps still video. BT.709 colours (what browsers assume
+// for HD video, so the colours match the image), x264's still-image tuning at
+// a very high quality: a still compresses to almost nothing anyway.
+function still(input) {
+  onExecProgress = progress;
+  run('-loop', '1', '-framerate', '30', '-i', input, '-t', '1',
+    '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2:out_color_matrix=bt709:out_range=tv,format=yuv420p',
+    '-c:v', 'libx264', '-preset', 'medium', '-tune', 'stillimage', '-crf', '10',
+    '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-color_range', 'tv',
+    '-movflags', '+faststart', 'out.mp4');
+  return { buf: take('out.mp4') };
+}
 
 function fix(input) {
   onExecProgress = progress;
@@ -143,7 +157,7 @@ self.onmessage = async ({ data }) => {
     const ff = await load();
     postMessage({ type: 'phase', phase: 'convert' });
     ff.FS.writeFile(input, new Uint8Array(data.buf));
-    const result = data.op === 'reverse' ? reverse(input, !!data.trimStill) : fix(input);
+    const result = data.op === 'reverse' ? reverse(input, !!data.trimStill) : data.op === 'still' ? still(input) : fix(input);
     postMessage({ type: 'done', ...result }, [result.buf.buffer]);
   } catch (e) {
     postMessage({ type: 'error', message: e?.message || String(e) });

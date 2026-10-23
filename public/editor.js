@@ -3,7 +3,7 @@
 // (key / click / after the video ends) and animation.
 
 import { reverseVideo } from './reverse.js';
-import { fixVideo } from './convert.js';
+import { fixVideo, stillVideo } from './convert.js';
 import { mountTimeline } from './timeline.js';
 
 const app = document.getElementById('app');
@@ -604,7 +604,7 @@ function renderEditor() {
   document.title = `${p.name} · Clip Proto`;
   const fileInput = h('input', {
     type: 'file', multiple: true, hidden: true,
-    accept: 'video/mp4,video/quicktime,video/webm,.mp4,.m4v,.mov,.webm',
+    accept: 'video/mp4,video/quicktime,video/webm,.mp4,.m4v,.mov,.webm,image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp',
     onchange: e => { uploadFiles(e.target.files, nextFreeSpot()); e.target.value = ''; },
   });
 
@@ -619,9 +619,9 @@ function renderEditor() {
   dom.popover = h('div', { class: 'popover', hidden: true });
   dom.zoomLabel = h('button', { class: 'zoom-label', title: 'Reset to 100%', onclick: () => zoomTo(1) }, '100%');
   dom.empty = h('div', { class: 'canvas-empty' },
-    h('h2', {}, 'Drop MP4s anywhere on the canvas'),
-    h('p', { class: 'muted' }, 'Each video becomes a frame. Drag from a frame\'s edge to another frame to connect them.'),
-    h('button', { class: 'primary', onclick: () => fileInput.click() }, 'Add videos'),
+    h('h2', {}, 'Drop MP4s or PNGs anywhere on the canvas'),
+    h('p', { class: 'muted' }, 'Each video or image becomes a frame. Drag from a frame\'s edge to another frame to connect them.'),
+    h('button', { class: 'primary', onclick: () => fileInput.click() }, 'Add videos or images'),
   );
   dom.canvas = h('div', { class: 'canvas', tabIndex: 0 },
     dom.world,
@@ -647,7 +647,7 @@ function renderEditor() {
       }),
       h('span', { id: 'saved', class: 'saved' }, 'Saved'),
       h('span', { class: 'spacer' }),
-      h('button', { onclick: () => fileInput.click() }, '+ Add videos'),
+      h('button', { onclick: () => fileInput.click() }, '+ Add videos or images'),
       fileInput,
       h('button', { onclick: copyLink }, 'Copy link'),
       h('button', { class: 'primary', onclick: () => openSaved(playerUrl()), disabled: !p.clips.length }, '▶ Play'),
@@ -809,7 +809,7 @@ function renderFrames() {
   for (const u of state.uploads) {
     dom.frames.append(h('div', { class: 'frame uploading', style: `left:${u.x}px;top:${u.y}px;width:${FRAME_W}px;height:${Math.round(FRAME_W * 9 / 16)}px` },
       h('div', { class: 'frame-label' }, h('span', { class: 'frame-name' }, u.name)),
-      h('div', { class: 'frame-body' }, h('div', { class: 'upload-msg' }, `Uploading… ${Math.round(u.pct)}%`, h('div', { class: 'bar' }, h('div', { style: `width:${u.pct}%` })))),
+      h('div', { class: 'frame-body' }, h('div', { class: 'upload-msg' }, `${u.label || 'Uploading…'} ${Math.round(u.pct)}%`, h('div', { class: 'bar' }, h('div', { style: `width:${u.pct}%` })))),
     ));
   }
 }
@@ -1751,7 +1751,8 @@ function renderInspector() {
           onfocus: () => snapshot(),
           oninput: e => { c.name = e.target.value; dom.frameEls.get(c.id).name.textContent = c.name; save(); },
         })),
-      h('p', { class: 'hint' }, [c.width && `${c.width}×${c.height}`, fmtTime(c.duration), c.size && fmtSize(c.size)].filter(Boolean).join(' · ')),
+      h('p', { class: 'hint' }, [c.image && 'Image', c.width && `${c.width}×${c.height}`, !c.image && fmtTime(c.duration), c.size && fmtSize(c.size)].filter(Boolean).join(' · ')),
+      frameDownloads(c),
       h('div', { class: 'row' },
         c.id === p.startClip
           ? h('span', { class: 'muted' }, h('span', { class: 'badge' }, 'Start'), 'Prototype starts here')
@@ -1766,7 +1767,7 @@ function renderInspector() {
             h('option', { value: 'hold', selected: c.end.type === 'hold' }, 'Hold last frame'),
           )),
       helpField(c, 'note', 'Screen note', 'Shown in the help panel (H) while this frame is on screen.', 'e.g. Try the arrow keys to move between the titles'),
-      fixSection(c),
+      c.image ? null : fixSection(c),
       h('div', { class: 'row' },
         confirmButton({ cls: 'danger-outline', label: `${TRASH_ICON} Delete frame`, armedLabel: 'Click again to delete', title: `Delete ${c.name}`, onConfirm: () => deleteClip(c) }),
       ),
@@ -1798,6 +1799,16 @@ function renderInspector() {
   sections.push(publishSection(), localSection());
 
   dom.inspector.replaceChildren(...sections);
+}
+
+// Download the frame's assets, named after the frame: its video, and for an
+// image frame the original image too.
+function frameDownloads(c) {
+  const base = (c.name || 'frame').replace(/[\\/:*?"<>|]+/g, ' ').trim() || 'frame';
+  const ext = f => (f.match(/\.\w+$/) || ['.mp4'])[0];
+  return h('div', { class: 'row downloads' },
+    h('a', { class: 'link-btn', href: `/media/${c.file}`, download: `${base}${ext(c.file)}` }, 'Download video'),
+    c.image ? h('a', { class: 'link-btn', href: `/media/${c.image.file}`, download: `${base}${ext(c.image.file)}` }, 'Download image') : null);
 }
 
 // Free text shown in the player's help panel (H). Empty removes the field.
@@ -2079,39 +2090,66 @@ function publishSection() {
 
 // ---------------------------------------------------------------- uploads
 
+// One file to /api/upload, with progress. Resolves to { file, size }.
+function sendUpload(body, name, onProgress = () => {}) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/upload');
+    xhr.setRequestHeader('x-filename', encodeURIComponent(name));
+    xhr.upload.onprogress = e => onProgress(e.loaded / e.total);
+    xhr.onloadend = () => {
+      let res;
+      try { res = JSON.parse(xhr.responseText); } catch { res = { error: 'Upload failed' }; }
+      if (xhr.status === 201) resolve(res); else reject(new Error(res.error || 'upload failed'));
+    };
+    xhr.send(body);
+  });
+}
+
+const IMAGE_FILE = /\.(png|jpe?g|webp)$/i;
+
+// Videos are uploaded as they are. An image (PNG, JPEG, WebP) becomes a frame
+// too: it's turned into a 1 s still video in the browser (convert.js), so it
+// works everywhere a video does, and the original is kept for downloading.
 function uploadFiles(fileList, at) {
   let i = 0;
   for (const file of fileList) {
-    const u = { id: uid(), name: file.name, pct: 0, x: Math.round(at.x + i * (FRAME_W + 60)), y: Math.round(at.y) };
+    const isImage = IMAGE_FILE.test(file.name) || /^image\//.test(file.type);
+    const u = { id: uid(), name: file.name, pct: 0, label: isImage ? 'Preparing image…' : null, x: Math.round(at.x + i * (FRAME_W + 60)), y: Math.round(at.y) };
     i++;
     state.uploads.push(u);
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', '/api/upload');
-    xhr.setRequestHeader('x-filename', encodeURIComponent(file.name));
-    xhr.upload.onprogress = e => { u.pct = (e.loaded / e.total) * 100; renderFrames(); };
-    xhr.onloadend = async () => {
-      state.uploads.splice(state.uploads.indexOf(u), 1);
-      let res;
-      try { res = JSON.parse(xhr.responseText); } catch { res = { error: 'Upload failed' }; }
-      if (xhr.status !== 201) { toast(`${file.name}: ${res.error || 'upload failed'}`); renderAll(); return; }
-      const meta = await probe(`/media/${res.file}`);
+    const progress = (label, pct) => { u.label = label; u.pct = pct * 100; renderFrames(); };
+    (async () => {
+      const base = file.name.replace(/\.[^.]+$/, '') || 'frame';
+      let video, image = null;
+      if (isImage) {
+        const still = await stillVideo(file, (phase, pct) => progress(phase === 'load' ? 'Loading the converter…' : 'Preparing image…', phase === 'convert' ? pct : 0));
+        const ext = (file.name.match(/\.(png|webp)$/i)?.[0] || '.jpg').toLowerCase();
+        const original = await sendUpload(file, `${base}${ext}`, p => progress('Uploading…', p * 0.3));
+        image = { file: original.file, name: file.name };
+        video = await sendUpload(still, `${base}.mp4`, p => progress('Uploading…', 0.3 + p * 0.7));
+      } else {
+        video = await sendUpload(file, file.name, p => progress('Uploading…', p));
+      }
+      const meta = await probe(`/media/${video.file}`);
       const clip = {
         id: uid(),
-        name: file.name.replace(/\.[^.]+$/, ''),
-        file: res.file,
-        size: res.size,
+        name: base,
+        file: video.file,
+        size: video.size,
         ...meta,
+        ...(image ? { image } : {}),
         x: u.x,
         y: u.y,
-        end: { type: 'loop' },
+        end: { type: image ? 'hold' : 'loop' }, // a still just stays on screen
         triggers: [],
       };
       commit(() => {
         state.project.clips.push(clip);
         if (!state.project.startClip) state.project.startClip = clip.id;
       });
-    };
-    xhr.send(file);
+    })().catch(e => toast(`${file.name}: ${e.message}`, 6000))
+      .finally(() => { state.uploads.splice(state.uploads.indexOf(u), 1); renderAll(); });
   }
   renderAll();
 }

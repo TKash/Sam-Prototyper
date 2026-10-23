@@ -11,7 +11,7 @@
 
 const PART = 24 * 1024 * 1024; // a multiple of 3 (and under KV's 25 MiB value limit)
 const SESSION_COOKIE = 'cp_session';
-const MIME = { '.mp4': 'video/mp4', '.m4v': 'video/mp4', '.mov': 'video/quicktime', '.webm': 'video/webm', '.jpg': 'image/jpeg' }; // .jpg: gallery covers
+const MIME = { '.mp4': 'video/mp4', '.m4v': 'video/mp4', '.mov': 'video/quicktime', '.webm': 'video/webm', '.jpg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' }; // images: gallery covers, image frames' originals
 const PLAYER_ASSETS = new Set(['player.js', 'player.css']);
 
 class HttpError extends Error {
@@ -27,7 +27,7 @@ const newId = () => {
   return btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 };
 const validId = id => /^[\w-]{4,32}$/.test(id);
-const validFile = f => /^[\w-]{6,64}\.(mp4|m4v|mov|webm|jpg)$/.test(f);
+const validFile = f => /^[\w-]{6,64}\.(mp4|m4v|mov|webm|jpg|png|webp)$/.test(f);
 
 // ---------------------------------------------------------------- auth
 
@@ -118,7 +118,7 @@ function newProject(body) {
 async function receiveUpload(request, env) {
   const name = decodeURIComponent(request.headers.get('x-filename') || 'clip.mp4');
   const ext = (name.match(/\.[^.]+$/) || ['.mp4'])[0].toLowerCase();
-  if (!MIME[ext]) throw new HttpError(415, 'Only .mp4, .m4v, .mov or .webm files');
+  if (!MIME[ext]) throw new HttpError(415, 'Only videos (.mp4, .m4v, .mov, .webm) or images (.png, .jpg, .webp)');
   const given = request.headers.get('x-file-id');
   const file = given && validFile(given) ? given : `${newId()}${newId()}${ext}`;
   if (given && await env.STORE.get(`media:${file}`)) {
