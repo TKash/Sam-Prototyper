@@ -77,6 +77,29 @@ for g in json.load(get('/api/gallery')):
 print(f'    {total / 1e6:.0f} MB of media')
 EOF
 
-echo "• Zip"
-( cd "$OUT" && rm -f "Clip Proto.zip" && zip -qr -X "Clip Proto.zip" "Clip Proto" )
-du -sh "$PKG" "$OUT/Clip Proto.zip"
+echo "• Zips (one for Windows, one for Mac)"
+rm -f "$OUT/Clip Proto.zip" "$OUT/Clip Proto (Windows).zip" "$OUT/Clip Proto (Mac).zip"
+# Mac: Unix permissions, so the starter and Node stay executable after unzipping.
+( cd "$OUT" && zip -qr -X "Clip Proto (Mac).zip" "Clip Proto" -x "Clip Proto/runtime/windows/*" "Clip Proto/Start Clip Proto (Windows).bat" )
+# Windows: plain DOS-style entries (what Windows' own zip folders expect), no Mac files.
+python3 -I - "$OUT" <<'PY'
+import os, sys, time, zipfile
+out = sys.argv[1]; root = 'Clip Proto'
+skip = lambda rel: rel.startswith(f'{root}/runtime/mac-') or rel.endswith('.command')
+stored = ('.mp4', '.m4v', '.mov', '.webm', '.jpg', '.png', '.webp', '.zip')
+with zipfile.ZipFile(f'{out}/Clip Proto (Windows).zip', 'w', zipfile.ZIP_DEFLATED, compresslevel=6) as z:
+    for d, dirs, files in os.walk(f'{out}/{root}'):
+        dirs.sort()
+        rel = os.path.relpath(d, out).replace(os.sep, '/')
+        if skip(rel + '/'): continue
+        for name in sorted(files):
+            r = f'{rel}/{name}'
+            if skip(r): continue
+            path = f'{d}/{name}'
+            info = zipfile.ZipInfo(r, time.localtime(os.path.getmtime(path))[:6])
+            info.create_system = 0; info.external_attr = 0x20  # MS-DOS, "archive"
+            info.compress_type = zipfile.ZIP_STORED if name.lower().endswith(stored) else zipfile.ZIP_DEFLATED
+            with open(path, 'rb') as f: z.writestr(info, f.read())
+PY
+unzip -tq "$OUT/Clip Proto (Windows).zip" && unzip -tq "$OUT/Clip Proto (Mac).zip"
+du -sh "$PKG" "$OUT/Clip Proto (Windows).zip" "$OUT/Clip Proto (Mac).zip"

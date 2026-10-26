@@ -49,7 +49,7 @@ Local data lives in `data/` (project JSON files, plus videos stored by content h
 
 ## Offline package (Windows and Mac)
 
-`offline/build.sh` builds `dist/Clip Proto.zip`: the whole tool plus every prototype in the hosted client gallery, for someone to run with no install and no internet. They unzip it and double-click **Start Clip Proto (Windows).bat** or **Start Clip Proto (Mac).command**. A console window opens and the browser opens the editor at `http://localhost:5180`; closing the window stops it. Instructions for them are in `offline/How to use.txt`, which goes in the zip.
+`offline/build.sh` builds `dist/Clip Proto (Windows).zip` and `dist/Clip Proto (Mac).zip`: the whole tool plus every prototype in the hosted client gallery, for someone to run with no install and no internet. They unzip it and double-click **Start Clip Proto (Windows).bat** or **Start Clip Proto (Mac).command**. A console window opens and the browser opens the editor at `http://localhost:5180`; closing the window stops it. Instructions for them are in `offline/How to use.txt`, which goes in the zip.
 
 - **Node.js is bundled**: Windows x64, and Mac Apple silicon and Intel. Checksums can be checked against nodejs.org.
 - **Local copies of the CDN libraries** go in `app/vendor`: ffmpeg (Fix video, rewinds, image frames), mp4-muxer and the QR code library. The app tries `/vendor` first and falls back to the CDN, so the same code works hosted.

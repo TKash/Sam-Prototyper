@@ -10,7 +10,7 @@ It comes with the prototypes from the client gallery already in it.
 
 1. FIRST: UNZIP
 ---------------
-Unzip "Clip Proto.zip" to a normal folder (for example Documents). Don't run it
+Unzip the zip to a normal folder (for example Documents). Don't run it
 from inside the zip. Keep the folder together: everything you make is saved in
 "app/data" inside it.
 
