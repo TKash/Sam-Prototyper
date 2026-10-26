@@ -28,6 +28,7 @@ const newId = () => {
 };
 const validId = id => /^[\w-]{4,32}$/.test(id);
 const validFile = f => /^[\w-]{6,64}\.(mp4|m4v|mov|webm|jpg|png|webp)$/.test(f);
+const validDownload = f => /^[\w-]{6,64}\.zip$/.test(f);
 
 // ---------------------------------------------------------------- auth
 
@@ -157,8 +158,8 @@ async function receiveUpload(request, env) {
   return { file, size };
 }
 
-async function serveMedia(env, file) {
-  if (!validFile(file)) throw new HttpError(404, 'Media not found');
+async function serveMedia(env, file, download = false) {
+  if (!(download ? validDownload(file) : validFile(file))) throw new HttpError(404, 'Media not found');
   const metaText = await env.STORE.get(`media:${file}`, { cacheTtl: 86400 });
   if (!metaText) throw new HttpError(404, 'Media not found');
   const meta = JSON.parse(metaText);
@@ -182,7 +183,8 @@ async function serveMedia(env, file) {
     headers: {
       'Content-Type': meta.type || 'video/mp4',
       'Content-Length': String(meta.size),
-      'Cache-Control': 'public, max-age=31536000, immutable',
+      'Cache-Control': download ? 'private, no-store' : 'public, max-age=31536000, immutable',
+      ...(download && { 'Content-Disposition': `attachment; filename="${String(meta.name || file).replace(/["\\\r\n]/g, '')}"` }),
       'Accept-Ranges': 'none',
     },
   });
@@ -203,6 +205,10 @@ async function route(request, env) {
     return env.ASSETS.fetch(new Request(new URL(`/${asset}`, url), request));
   }
   if (parts[0] === 'media' && parts.length === 2 && method === 'GET') return serveMedia(env, parts[1]);
+  if (parts[0] === 'download' && parts.length === 2 && method === 'GET') {
+    if (!(await authed())) return new Response(null, { status: 302, headers: { Location: '/' } }); // sign in on the editor first
+    return serveMedia(env, parts[1], true);
+  }
   if (url.pathname === '/gallery' || url.pathname === '/gallery/') return env.ASSETS.fetch(new Request(new URL('/gallery.html', url), request));
   if (url.pathname === '/remote' || url.pathname === '/remote/') return env.ASSETS.fetch(new Request(new URL('/remote.html', url), request));
   if (url.pathname === '/api/gallery' && method === 'GET') return json(200, galleryList(await listProjects(env)));
