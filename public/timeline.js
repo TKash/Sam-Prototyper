@@ -482,7 +482,7 @@ export function mountTimeline(ctx) {
     ));
 
     sections.push(ctx.publishSection(), ctx.localSection());
-    el.inspector.replaceChildren(...sections);
+    el.inspector.replaceChildren(...sections.filter(Boolean));
   }
 
   function keyClashWarning() {

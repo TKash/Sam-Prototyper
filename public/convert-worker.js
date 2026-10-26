@@ -8,7 +8,8 @@
 //
 // The single-thread build needs no special headers (no SharedArrayBuffer).
 
-const CORE = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm';
+// A local copy (the offline package has one in /vendor) is used when present.
+const CORES = [`${self.location.origin}/vendor/ffmpeg`, 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm'];
 
 // x264 at constant quality (not a fixed bitrate), so the copy matches the
 // source's quality whatever it is; aq-mode 3 keeps dark gradients clean.
@@ -25,12 +26,14 @@ let onExecProgress = () => {};
 async function load() {
   if (core) return core;
   postMessage({ type: 'phase', phase: 'load' });
-  try {
-    const { default: createCore } = await import(`${CORE}/ffmpeg-core.js`);
-    core = await createCore({ locateFile: f => (f.endsWith('.wasm') ? `${CORE}/ffmpeg-core.wasm` : f) });
-  } catch {
-    throw new Error("Couldn't load the video converter. It needs an internet connection the first time.");
+  for (const base of CORES) {
+    try {
+      const { default: createCore } = await import(`${base}/ffmpeg-core.js`);
+      core = await createCore({ locateFile: f => (f.endsWith('.wasm') ? `${base}/ffmpeg-core.wasm` : f) });
+      break;
+    } catch { /* try the next copy */ }
   }
+  if (!core) throw new Error("Couldn't load the video converter. It needs an internet connection the first time.");
   core.setLogger(({ type, message }) => {
     if (type === 'stdout') stdout.push(message);
     else { log.push(message); if (log.length > 30) log.shift(); }

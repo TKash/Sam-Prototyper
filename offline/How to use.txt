@@ -1,0 +1,71 @@
+CLIP PROTO (OFFLINE)
+====================
+
+Clip Proto turns UI screen recordings into keyboard-driven video prototypes.
+This copy runs entirely on your computer. Nothing to install, and no internet
+needed (only the phone remote needs internet, see below).
+
+It comes with the prototypes from the client gallery already in it.
+
+
+1. FIRST: UNZIP
+---------------
+Unzip "Clip Proto.zip" to a normal folder (for example Documents). Don't run it
+from inside the zip. Keep the folder together: everything you make is saved in
+"app/data" inside it.
+
+
+2. START IT
+-----------
+Windows: double-click "Start Clip Proto (Windows).bat".
+  - If Windows shows "Windows protected your PC", click "More info", then
+    "Run anyway".
+  - If the firewall asks about Node.js, "Allow" is only needed for the phone
+    remote. You can cancel and everything else still works.
+
+Mac: double-click "Start Clip Proto (Mac).command".
+  - The first time, macOS may say it can't verify the file. Click "Done",
+    open System Settings > Privacy & Security, scroll down and click
+    "Open Anyway" next to "Start Clip Proto (Mac).command", then confirm.
+    (On older macOS: right-click the file > Open > Open.)
+  - Works on both Apple silicon and Intel Macs.
+
+A small window (Command Prompt or Terminal) opens and your browser opens the
+editor at http://localhost:5180. Keep that window open while you use Clip
+Proto. Close it to stop.
+
+Use Chrome or Edge for the best results. Safari works for watching.
+
+
+3. USING IT
+-----------
+Editor:          http://localhost:5180
+Client gallery:  http://localhost:5180/gallery
+
+- Make a prototype: on the editor home screen, create one, then drop in MP4s
+  (or PNG/JPG images for static screens) and connect the frames.
+- Press "Play" to watch it full screen. Press H in any prototype for help.
+- In the gallery: arrow keys and Enter choose a prototype. Inside one,
+  R restarts, M goes back to the gallery, N / P go to the next / previous
+  prototype, H shows help. Double-click toggles full screen.
+- "Download offline file" (Client gallery box, editor home screen) makes one HTML file
+  with every gallery prototype inside, to share or play on another computer
+  without starting Clip Proto.
+
+
+4. PHONE REMOTE (needs internet)
+--------------------------------
+The gallery page shows a QR code. Scan it with a phone to use the phone as a
+TV remote. The phone must be on the same Wi-Fi as this computer, and both need
+internet (the remote talks through an online relay). On Windows, allow Node.js
+through the firewall when asked. Everything else works without internet.
+
+
+5. GOOD TO KNOW
+---------------
+- Your work is in "app/data" (projects and videos). Back up that folder to keep
+  a copy, or copy it into another Clip Proto folder to move your work.
+- If the browser doesn't open, go to http://localhost:5180 yourself.
+- If it says the port is in use, Clip Proto is already running: just use the
+  browser tab, or close the other window first.
+- Starting it again later keeps everything you made.

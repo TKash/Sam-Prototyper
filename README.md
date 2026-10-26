@@ -47,6 +47,18 @@ Rewinds use a reversed copy of the video that the editor makes in your browser w
 
 Local data lives in `data/` (project JSON files, plus videos stored by content hash). It is git-ignored on purpose. Never commit it.
 
+## Offline package (Windows and Mac)
+
+`offline/build.sh` builds `dist/Clip Proto.zip`: the whole tool plus every prototype in the hosted client gallery, for someone to run with no install and no internet. They unzip it and double-click **Start Clip Proto (Windows).bat** or **Start Clip Proto (Mac).command**. A console window opens and the browser opens the editor at `http://localhost:5180`; closing the window stops it. Instructions for them are in `offline/How to use.txt`, which goes in the zip.
+
+- **Node.js is bundled**: Windows x64, and Mac Apple silicon and Intel. Checksums can be checked against nodejs.org.
+- **Local copies of the CDN libraries** go in `app/vendor`: ffmpeg (Fix video, rewinds, image frames), mp4-muxer and the QR code library. The app tries `/vendor` first and falls back to the CDN, so the same code works hosted.
+- **Data:** every prototype in the hosted gallery is copied into `app/data` with all its videos. Work made in the package is saved there too.
+- **Phone remote:** on localhost the gallery's QR code points at the computer's Wi-Fi address. The phone must be on the same Wi-Fi, and both need internet for the relay.
+- **Publish to web is hidden** because wrangler isn't bundled.
+
+Rebuild it any time to pick up newer prototypes: `bash offline/build.sh` (needs curl, tar, unzip, zip, python3 and npm).
+
 ## Hosted version (Cloudflare Workers)
 
 The editor and player are also hosted at https://clip-proto.clip-proto.workers.dev. Projects and videos live in Cloudflare KV on the free plan.

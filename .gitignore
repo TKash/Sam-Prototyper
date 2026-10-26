@@ -15,3 +15,6 @@ exports/
 .DS_Store
 Thumbs.db
 *.log
+
+# Offline package builds (offline/build.sh)
+dist/

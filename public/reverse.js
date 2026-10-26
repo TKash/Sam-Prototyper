@@ -15,7 +15,7 @@
 
 import { reverseWithFfmpeg } from './convert.js';
 
-const MUXER_URL = 'https://cdn.jsdelivr.net/npm/mp4-muxer@5.1.3/+esm';
+const MUXER_URLS = ['/vendor/mp4-muxer.mjs', 'https://cdn.jsdelivr.net/npm/mp4-muxer@5.1.3/+esm']; // local copy first (offline package)
 const CODECS = ['avc1.640028', 'avc1.4d0028', 'avc1.420028'];
 
 const once = (el, ev) => new Promise((resolve, reject) => {
@@ -71,7 +71,7 @@ export async function reverseVideo(src, onProgress = () => {}, opts = {}) {
 
 async function reverseWithWebCodecs(src, onProgress = () => {}, { trimStill = false } = {}) {
   if (typeof VideoEncoder === 'undefined') throw new Error('This browser can\'t encode video (WebCodecs missing). Use Chrome or Edge.');
-  const { Muxer, ArrayBufferTarget } = await import(MUXER_URL);
+  const { Muxer, ArrayBufferTarget } = await import(MUXER_URLS[0]).catch(() => import(MUXER_URLS[1]));
 
   const v = document.createElement('video');
   v.muted = true;

@@ -110,9 +110,10 @@
     newId: function () { var v = randomId(); store(v); return v; },
     off: function () { store(null); },
     // Where the phone goes. The offline gallery file sets CLIP_PROTO_ORIGIN
-    // (it's opened from disk, so it has no web address of its own).
-    remoteUrl: function (id) {
-      var base = /^https?:$/.test(location.protocol) ? location.origin : (window.CLIP_PROTO_ORIGIN || '');
+    // (it's opened from disk, so it has no web address of its own). `base`
+    // overrides it, e.g. this computer's Wi-Fi address when on localhost.
+    remoteUrl: function (id, base) {
+      base = base || (/^https?:$/.test(location.protocol) ? location.origin : (window.CLIP_PROTO_ORIGIN || ''));
       return base + '/remote#' + id;
     },
 

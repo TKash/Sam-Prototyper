@@ -326,14 +326,25 @@
 
     let qrLib = null;
     const loadQr = () => (qrLib ||= new Promise((res, rej) => {
-      const s = document.createElement('script');
-      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js';
-      s.onload = () => res(window.qrcode); s.onerror = rej;
-      document.head.append(s);
+      // A local copy (offline package) first, then the CDN.
+      const srcs = ['/vendor/qrcode.min.js', 'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js'];
+      const next = () => {
+        if (!srcs.length) return rej(new Error('No QR library'));
+        const s = document.createElement('script');
+        s.src = srcs.shift();
+        s.onload = () => res(window.qrcode); s.onerror = () => { s.remove(); next(); };
+        document.head.append(s);
+      };
+      next();
     }));
 
+    // On localhost (the app running on this computer) the phone can't open
+    // "localhost", so it gets this computer's address on the Wi-Fi instead.
+    const onLocalhost = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+    let phoneBase = null;
+
     function showPairing(id) {
-      const url = R.remoteUrl(id);
+      const url = R.remoteUrl(id, phoneBase);
       document.getElementById('pairCode').textContent = id.replace(/(.{4})/g, '$1 ').trim();
       document.getElementById('openRemote').href = url;
       const qr = document.getElementById('qr');
@@ -347,7 +358,16 @@
       const id = R.id() || R.newId();
       showPairing(id);
       startLink(id);
-      document.getElementById('remoteWarn').hidden = !(/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname) || (location.protocol === 'file:' && !window.CLIP_PROTO_ORIGIN));
+      const warn = document.getElementById('remoteWarn');
+      warn.hidden = !(onLocalhost || (location.protocol === 'file:' && !window.CLIP_PROTO_ORIGIN));
+      if (onLocalhost) {
+        fetch('/api/info').then(r => r.json()).then(info => {
+          if (!info.lan?.length) return;
+          phoneBase = info.lan[0];
+          showPairing(R.id() || id);
+          warn.textContent = 'The phone needs to be on the same Wi-Fi as this computer, and both need internet for the remote to connect.';
+        }).catch(() => {});
+      }
       document.getElementById('newCode').onclick = () => { const next = R.newId(); showPairing(next); startLink(next); };
     } else paintStatus();
   </script>

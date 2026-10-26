@@ -170,6 +170,7 @@ async function route() {
     const info = await api('/api/info');
     state.lan = info.lan || [];
     state.hosted = Boolean(info.hosted);
+    state.canPublish = info.canPublish !== false; // the offline package has no wrangler
     state.timeline = null;
     savedJson.set(proj.id, contentJson(proj));
     if (proj.mode === 'timeline') {
@@ -1798,7 +1799,7 @@ function renderInspector() {
 
   sections.push(publishSection(), localSection());
 
-  dom.inspector.replaceChildren(...sections);
+  dom.inspector.replaceChildren(...sections.filter(Boolean));
 }
 
 // Download the frame's assets, named after the frame: its video, and for an
@@ -2069,6 +2070,7 @@ function publishSection() {
       h('div', { class: 'row' }, h('button', { onclick: () => openSaved(playerUrl()), disabled: !hasMedia(p) }, 'Open')),
     );
   }
+  if (!state.canPublish) return null;
   return h('div', { class: 'section' },
     h('h3', {}, 'Public link'),
     p.publicUrl

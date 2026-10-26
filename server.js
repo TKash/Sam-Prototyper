@@ -18,6 +18,7 @@ const DATA = path.join(ROOT, 'data');
 const PROJECTS = path.join(DATA, 'projects');
 const MEDIA = path.join(DATA, 'media');
 const EXPORTS = path.join(ROOT, 'exports');
+const VENDOR = path.join(ROOT, 'vendor');
 for (const d of [PROJECTS, MEDIA, EXPORTS]) fs.mkdirSync(d, { recursive: true });
 
 const MIME = {
@@ -29,6 +30,8 @@ const MIME = {
   '.jpg': 'image/jpeg',
   '.png': 'image/png',
   '.webp': 'image/webp',
+  '.mjs': 'text/javascript; charset=utf-8',
+  '.wasm': 'application/wasm',
   '.mp4': 'video/mp4',
   '.m4v': 'video/mp4',
   '.mov': 'video/quicktime',
@@ -300,7 +303,7 @@ async function route(req, res, url) {
   const parts = url.pathname.split('/').filter(Boolean);
   const method = req.method;
 
-  if (url.pathname === '/api/info') return json(res, 200, { port: PORT, lan: lanAddresses() });
+  if (url.pathname === '/api/info') return json(res, 200, { port: PORT, lan: lanAddresses(), canPublish: fs.existsSync(WRANGLER) });
 
   if (url.pathname === '/api/projects') {
     if (method === 'GET') {
@@ -349,8 +352,17 @@ async function route(req, res, url) {
 
   if (parts[0] === 'media' && parts.length === 2) {
     const file = path.join(MEDIA, path.basename(parts[1]));
-    if (!/^[a-f0-9]{40}\.\w+$/.test(parts[1]) || !fs.existsSync(file)) throw new HttpError(404, 'Media not found');
+    // sha1 names from uploads here; shorter ids on media copied from the hosted version.
+    if (!/^[\w-]{6,64}\.\w+$/.test(parts[1]) || !fs.existsSync(file)) throw new HttpError(404, 'Media not found');
     return sendFile(req, res, file, 'public, max-age=31536000, immutable');
+  }
+
+  // Local copies of the CDN libraries (ffmpeg, mp4-muxer, qrcode), when present
+  // (the offline package has them), so nothing needs the internet.
+  if (parts[0] === 'vendor' && parts.length >= 2) {
+    const file = path.resolve(VENDOR, ...parts.slice(1).map(decodeURIComponent));
+    if (!file.startsWith(VENDOR + path.sep) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) throw new HttpError(404, 'Not found');
+    return sendFile(req, res, file, 'public, max-age=86400');
   }
 
   // Player: /p/:id serves player.html; its relative assets resolve to /p/player.js etc.
@@ -365,7 +377,7 @@ async function route(req, res, url) {
   return sendFile(req, res, file, 'no-cache');
 }
 
-http.createServer(async (req, res) => {
+const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
   try {
     await route(req, res, url);
@@ -375,7 +387,28 @@ http.createServer(async (req, res) => {
     if (res.headersSent) return res.destroy();
     json(res, status, { error: err.message || 'Server error' });
   }
-}).listen(PORT, '0.0.0.0', () => {
+});
+
+// CLIP_PROTO_OPEN=1 (the offline package's starters): open the editor in the
+// browser once the server is up, or straight away if it's already running.
+function openBrowser() {
+  if (!process.env.CLIP_PROTO_OPEN) return;
+  const url = `http://localhost:${PORT}/`;
+  const [cmd, args] = process.platform === 'win32' ? ['cmd', ['/c', 'start', '', url]]
+    : process.platform === 'darwin' ? ['open', [url]] : ['xdg-open', [url]];
+  spawn(cmd, args, { stdio: 'ignore', detached: true }).on('error', () => {}).unref();
+}
+
+server.on('error', err => {
+  if (err.code !== 'EADDRINUSE') throw err;
+  console.log(`Port ${PORT} is already in use: Clip Proto is probably already running.`);
+  openBrowser();
+  setTimeout(() => process.exit(0), 1500);
+});
+
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`Clip Proto editor → http://localhost:${PORT}`);
+  console.log(`Client gallery    → http://localhost:${PORT}/gallery`);
   for (const a of lanAddresses()) console.log(`  on your network → ${a}`);
+  openBrowser();
 });
